@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 using Unity.Netcode;
 using TMPro;
@@ -10,6 +10,7 @@ public class NetworkUI : MonoBehaviour
     [SerializeField] public Button clientButton;
     [SerializeField] public Button disconnectButton;
     [SerializeField] public Button startGameButton;
+    [SerializeField] public Button backToMenuButton;
 
     [Header("Input")]
     [SerializeField] public TMP_InputField ipInputField;
@@ -22,13 +23,15 @@ public class NetworkUI : MonoBehaviour
     [SerializeField] public GameObject mainMenuPanel;
     [SerializeField] public GameObject lobbyPanel;
     [SerializeField] public GameObject hudPanel;
+    
+    [Header("Main Menu Reference")]
+    [SerializeField] public MenuManager menuManager;
 
     private bool isConnected = false;
     private bool lobbyVisible = false;
 
     void Start()
     {
-        // Buton dinleyicilerini bagla
         if (hostButton != null)
             hostButton.onClick.AddListener(StartHost);
         
@@ -40,24 +43,22 @@ public class NetworkUI : MonoBehaviour
         
         if (startGameButton != null)
             startGameButton.onClick.AddListener(StartGame);
-
-        ShowMainMenu();
         
-        Debug.Log("NetworkUI baslatildi. Buton referanslari: Host=" + (hostButton != null) + 
-                  ", Client=" + (clientButton != null) + 
-                  ", Disconnect=" + (disconnectButton != null) +
-                  ", StartGame=" + (startGameButton != null));
+        if (backToMenuButton != null)
+            backToMenuButton.onClick.AddListener(BackToMainMenu);
+
+        ShowMainMenuPanel();
+        
+        Debug.Log("[NetworkUI] Initialized");
     }
 
     void Update()
     {
-        // ESC ile lobi panelini toggle et (sadece baglandiysa)
         if (Input.GetKeyDown(KeyCode.Escape) && isConnected)
         {
             ToggleLobbyPanel();
         }
 
-        // Oyuncu sayisini guncelle
         if (isConnected && NetworkManager.Singleton != null)
         {
             int playerCount = NetworkManager.Singleton.ConnectedClients.Count;
@@ -74,21 +75,15 @@ public class NetworkUI : MonoBehaviour
         
         if (lobbyVisible)
         {
-            if (lobbyPanel != null)
-                lobbyPanel.SetActive(true);
-            if (hudPanel != null)
-                hudPanel.SetActive(false);
-            
+            if (lobbyPanel != null) lobbyPanel.SetActive(true);
+            if (hudPanel != null) hudPanel.SetActive(false);
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
         else
         {
-            if (lobbyPanel != null)
-                lobbyPanel.SetActive(false);
-            if (hudPanel != null)
-                hudPanel.SetActive(true);
-            
+            if (lobbyPanel != null) lobbyPanel.SetActive(false);
+            if (hudPanel != null) hudPanel.SetActive(true);
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
@@ -96,14 +91,11 @@ public class NetworkUI : MonoBehaviour
 
     public void StartGame()
     {
-        Debug.Log("Operasyon baslatildi!");
-        
+        Debug.Log("[NetworkUI] Starting game!");
         lobbyVisible = false;
         
-        if (lobbyPanel != null)
-            lobbyPanel.SetActive(false);
-        if (hudPanel != null)
-            hudPanel.SetActive(true);
+        if (lobbyPanel != null) lobbyPanel.SetActive(false);
+        if (hudPanel != null) hudPanel.SetActive(true);
         
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
@@ -113,7 +105,7 @@ public class NetworkUI : MonoBehaviour
     {
         if (NetworkManager.Singleton == null)
         {
-            Debug.LogError("NetworkManager bulunamadi!");
+            Debug.LogError("[NetworkUI] NetworkManager not found!");
             return;
         }
 
@@ -121,7 +113,6 @@ public class NetworkUI : MonoBehaviour
         isConnected = true;
         lobbyVisible = true;
         
-        // Ana menuyu gizle, lobi goster
         if (mainMenuPanel != null) mainMenuPanel.SetActive(false);
         if (lobbyPanel != null) lobbyPanel.SetActive(true);
         if (hudPanel != null) hudPanel.SetActive(false);
@@ -129,14 +120,14 @@ public class NetworkUI : MonoBehaviour
         if (statusText != null)
             statusText.text = "> SUNUCU AKTIF...";
 
-        Debug.Log("Host baslatildi!");
+        Debug.Log("[NetworkUI] Host started!");
     }
 
     void StartClient()
     {
         if (NetworkManager.Singleton == null)
         {
-            Debug.LogError("NetworkManager bulunamadi!");
+            Debug.LogError("[NetworkUI] NetworkManager not found!");
             return;
         }
 
@@ -156,7 +147,6 @@ public class NetworkUI : MonoBehaviour
         isConnected = true;
         lobbyVisible = true;
         
-        // Ana menuyu gizle, lobi goster
         if (mainMenuPanel != null) mainMenuPanel.SetActive(false);
         if (lobbyPanel != null) lobbyPanel.SetActive(true);
         if (hudPanel != null) hudPanel.SetActive(false);
@@ -164,12 +154,12 @@ public class NetworkUI : MonoBehaviour
         if (statusText != null)
             statusText.text = "> BAGLANILIYOR...";
 
-        Debug.Log("Client baslatildi! IP: " + ip);
+        Debug.Log("[NetworkUI] Client started! IP: " + ip);
     }
 
     public void Disconnect()
     {
-        Debug.Log("Oturum sonlandiriliyor!");
+        Debug.Log("[NetworkUI] Disconnecting!");
         
         if (NetworkManager.Singleton != null)
         {
@@ -179,18 +169,39 @@ public class NetworkUI : MonoBehaviour
         isConnected = false;
         lobbyVisible = false;
         
-        ShowMainMenu();
+        ShowMainMenuPanel();
         
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
-
-        Debug.Log("Baglanti kesildi!");
     }
 
-    void ShowMainMenu()
+    public void ShowMainMenuPanel()
     {
         if (mainMenuPanel != null) mainMenuPanel.SetActive(true);
         if (lobbyPanel != null) lobbyPanel.SetActive(false);
         if (hudPanel != null) hudPanel.SetActive(false);
+        
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+    }
+    
+    public void BackToMainMenu()
+    {
+        Debug.Log("[NetworkUI] Back to main menu");
+        
+        GameModeManager.Reset();
+        
+        if (mainMenuPanel != null) mainMenuPanel.SetActive(false);
+        if (lobbyPanel != null) lobbyPanel.SetActive(false);
+        if (hudPanel != null) hudPanel.SetActive(false);
+        
+        if (menuManager != null)
+        {
+            menuManager.OpenSelectionMenu();
+        }
+        else
+        {
+            Debug.LogWarning("[NetworkUI] MenuManager reference not set!");
+        }
     }
 }

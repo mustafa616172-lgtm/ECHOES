@@ -1,45 +1,107 @@
-using UnityEngine;
-using UnityEngine.SceneManagement; // Sahne geçiþleri için
+ï»¿using UnityEngine;
+using UnityEngine.SceneManagement;
 
+/// <summary>
+/// ECHOES - Menu Manager
+/// Ana menu sistemi - panel gecisleri ve oyun baslama.
+/// MainMenu, Settings, Multiplayer panellerini yonetir.
+/// </summary>
 public class MenuManager : MonoBehaviour
 {
     [Header("UI Panelleri")]
     public GameObject mainMenuPanel;
-    public GameObject selectionPanel;
+    public GameObject settingsPanel;
+    public GameObject multiplayerPanel;
     public GameObject loadingPanel;
 
     [Header("Ayarlar")]
-    public string gameSceneName = "GameScene";
+    public string gameSceneName = "Echoes";
 
-    // Start butonuna basýldýðýnda çalýþacak
-    public void OpenSelectionMenu()
+    void Start()
     {
-        mainMenuPanel.SetActive(false);
-        selectionPanel.SetActive(true);
+        ShowMainMenu();
+        
+        // Cursor'u ac
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+        
+        Debug.Log("[MenuManager] Initialized");
+    }
+    
+    void HideAllPanels()
+    {
+        if (mainMenuPanel != null) mainMenuPanel.SetActive(false);
+        if (settingsPanel != null) settingsPanel.SetActive(false);
+        if (multiplayerPanel != null) multiplayerPanel.SetActive(false);
+        if (loadingPanel != null) loadingPanel.SetActive(false);
     }
 
-    // Seçim menüsünden geri dönmek için
-    public void BackToMainMenu()
+    public void ShowMainMenu()
     {
-        selectionPanel.SetActive(false);
-        mainMenuPanel.SetActive(true);
+        HideAllPanels();
+        if (mainMenuPanel != null) mainMenuPanel.SetActive(true);
+        Debug.Log("[MenuManager] Showing MainMenu");
     }
 
-    // Tek oyunculu baþlatma
+    public void OpenSettings()
+    {
+        HideAllPanels();
+        if (settingsPanel != null) settingsPanel.SetActive(true);
+        Debug.Log("[MenuManager] Showing Settings");
+    }
+
+    public void CloseSettings()
+    {
+        ShowMainMenu();
+    }
+    
+    public void OpenMultiplayer()
+    {
+        HideAllPanels();
+        if (multiplayerPanel != null) multiplayerPanel.SetActive(true);
+        Debug.Log("[MenuManager] Showing Multiplayer");
+    }
+    
+    public void CloseMultiplayer()
+    {
+        ShowMainMenu();
+    }
+
     public void StartSingleplayer()
     {
-        selectionPanel.SetActive(false);
-        loadingPanel.SetActive(true);
+        Debug.Log("[MenuManager] Starting Singleplayer");
+        GameModeManager.StartSinglePlayer();
+        
+        HideAllPanels();
+        if (loadingPanel != null) loadingPanel.SetActive(true);
+        
         SceneManager.LoadScene(gameSceneName);
     }
 
-    // Çok oyunculu baðlantý mantýðý (Örn: Photon veya Mirror için)
     public void StartMultiplayer()
     {
-        selectionPanel.SetActive(false);
-        loadingPanel.SetActive(true);
-        
-        Debug.Log("Sunucuya baðlanýlýyor...");
-        // Burada Network Manager'ý tetikleyip Lobby sahnesine geçiþ yapmalýsýn.
+        Debug.Log("[MenuManager] Opening Multiplayer Menu");
+        OpenMultiplayer();
+    }
+
+    public void QuitGame()
+    {
+        Debug.Log("[MenuManager] Quitting game...");
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
+    
+    // Eski uyumluluk methodlari
+    public void OpenSelectionMenu()
+    {
+        ShowMainMenu();
+    }
+    
+    public void GoBackToMainMenu()
+    {
+        ShowMainMenu();
     }
 }

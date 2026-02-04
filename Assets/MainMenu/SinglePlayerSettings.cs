@@ -1,57 +1,88 @@
-using UnityEngine;
-using UnityEngine.UI; // Butonlarý kontrol etmek için
+ï»¿using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 
-public class SingleplayerMenuManager : MonoBehaviour
+/// <summary>
+/// Single Player panel kontrolleri.
+/// Yeni oyun ve devam et butonlarini yonetir.
+/// </summary>
+public class SinglePlayerSettings : MonoBehaviour
 {
-    [Header("UI Elemanlarý")]
-    public Button continueButton;
+    [Header("Paneller")]
     public GameObject singleplayerPanel;
     public GameObject selectionPanel;
-
+    
+    [Header("Butonlar")]
+    public Button newGameButton;
+    public Button continueButton;
+    
     [Header("Ayarlar")]
-    public string gameSceneName = "GameScene";
-
+    public string gameSceneName = "Echoes";
+    
+    void Start()
+    {
+        // Buton baglantilari
+        if (newGameButton != null)
+            newGameButton.onClick.AddListener(StartNewGame);
+            
+        if (continueButton != null)
+            continueButton.onClick.AddListener(ContinueGame);
+    }
+    
     void OnEnable()
     {
-        // Panel her açýldýðýnda kayýt kontrolü yap
+        // Sadece kayit kontrolu yap - OTOMATIK BASLATMA
         CheckSaveData();
     }
-
-    public void CheckSaveData()
+    
+    void CheckSaveData()
     {
-        // "HasSavedGame" anahtarý veritabanýnda (PlayerPrefs) var mý kontrol et
-        if (PlayerPrefs.HasKey("SaveExists") && PlayerPrefs.GetInt("SaveExists") == 1)
+        // Kayitli veri var mi kontrol et
+        bool hasSave = PlayerPrefs.HasKey("HasSaveData");
+        
+        if (continueButton != null)
         {
-            continueButton.interactable = true; // Butonu týklanabilir yap
-            continueButton.gameObject.SetActive(true); // Veya tamamen görünür yap
+            continueButton.interactable = hasSave;
         }
-        else
-        {
-            continueButton.interactable = false; // Týklanamaz yap
-            // continueButton.gameObject.SetActive(false); // Ýstersen tamamen gizleyebilirsin
-        }
+        
+        Debug.Log("[SinglePlayerSettings] Save data check: " + (hasSave ? "Found" : "Not found"));
     }
-
+    
     public void StartNewGame()
     {
-        // Yeni oyun baþlarken eski kaydý temizleyebilir veya üzerine yazabiliriz
-        PlayerPrefs.SetInt("SaveExists", 1); // Artýk bir kayýt olduðunu sisteme kaydet
-        PlayerPrefs.DeleteKey("PlayerLevel"); // Örnek: Eski ilerlemeyi sil
+        Debug.Log("[SinglePlayerSettings] Starting new game...");
+        
+        // Eski kaydi temizle
+        PlayerPrefs.DeleteAll();
         PlayerPrefs.Save();
         
-        SceneManager.LoadScene(gameSceneName);
+        // Oyunu baslat
+        LoadGame();
     }
-
+    
     public void ContinueGame()
     {
-        // Kayýtlý verileri yükleyip sahneyi aç
+        Debug.Log("[SinglePlayerSettings] Continuing game...");
+        
+        // Kayitli verilerle devam et
+        LoadGame();
+    }
+    
+    void LoadGame()
+    {
+        // GameMode ayarla
+        GameModeManager.StartSinglePlayer();
+        
+        // Sahne yukle
         SceneManager.LoadScene(gameSceneName);
     }
-
+    
     public void BackToSelection()
     {
-        singleplayerPanel.SetActive(false);
-        selectionPanel.SetActive(true);
+        if (singleplayerPanel != null)
+            singleplayerPanel.SetActive(false);
+            
+        if (selectionPanel != null)
+            selectionPanel.SetActive(true);
     }
 }
