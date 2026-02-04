@@ -20,7 +20,24 @@ public class MultiplayerManager : MonoBehaviour
     private UnityTransport transport;
     private bool isInitialized = false;
 
+    void Awake()
+    {
+        Debug.Log("[MultiplayerManager] Awake called - Mode: " + GameModeManager.CurrentMode);
+    }
+
     void Start()
+    {
+        // Use Start instead of OnEnable for more reliable timing
+        TryInitialize();
+    }
+
+    void OnEnable()
+    {
+        // Also try on enable in case object was disabled then enabled
+        TryInitialize();
+    }
+
+    void TryInitialize()
     {
         // Check if we're in multiplayer mode
         if (!GameModeManager.IsMultiplayer)
@@ -30,14 +47,47 @@ public class MultiplayerManager : MonoBehaviour
             return;
         }
         
+        // Only initialize once
+        if (isInitialized) return;
+        
         Debug.Log("[MultiplayerManager] Initializing...");
         
         networkManager = NetworkManager.Singleton;
         if (networkManager == null)
         {
-            Debug.LogError("[MultiplayerManager] NetworkManager not found!");
+            Debug.LogError("[MultiplayerManager] NetworkManager not found! Waiting...");
+            StartCoroutine(WaitForNetworkManager());
             return;
         }
+        
+        CompleteInitialization();
+    }
+
+    System.Collections.IEnumerator WaitForNetworkManager()
+    {
+        float timeout = 5f;
+        float waited = 0f;
+        
+        while (NetworkManager.Singleton == null && waited < timeout)
+        {
+            yield return new WaitForSeconds(0.1f);
+            waited += 0.1f;
+        }
+        
+        if (NetworkManager.Singleton != null)
+        {
+            networkManager = NetworkManager.Singleton;
+            CompleteInitialization();
+        }
+        else
+        {
+            Debug.LogError("[MultiplayerManager] NetworkManager not found after waiting!");
+        }
+    }
+
+    void CompleteInitialization()
+    {
+        if (isInitialized) return;
         
         transport = networkManager.GetComponent<UnityTransport>();
         
@@ -49,6 +99,7 @@ public class MultiplayerManager : MonoBehaviour
         AutoStartNetwork();
         
         isInitialized = true;
+        Debug.Log("[MultiplayerManager] Initialization complete!");
     }
     
     void OnDestroy()

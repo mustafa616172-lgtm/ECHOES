@@ -20,14 +20,106 @@ public class CompleteMenuSetup : Editor
     private static Color accentCyan = new Color(0.4f, 0.85f, 0.85f, 1f); // Turkuaz
     private static Color accentPink = new Color(0.9f, 0.5f, 0.7f, 1f); // Pembe
 
-    [MenuItem("Tools/ECHOES/COMPLETE SETUP - MainMenu")]
+    [MenuItem("Tools/ECHOES/Menu Setup/1. TUM MENULER (Hepsini Kur)")]
     public static void CompleteMainMenuSetup()
     {
-        // Check if we're in MainMenu scene
+        var (canvas, menuManager) = EnsureBasicSetup();
+        if (canvas == null) return;
+        
+        // Create all panels
+        GameObject mainPanel = CreateMainMenuPanel(canvas.transform, menuManager);
+        GameObject settingsPanel = CreateSettingsPanel(canvas.transform, menuManager);
+        GameObject multiplayerPanel = CreateMultiplayerPanel(canvas.transform, menuManager);
+        
+        // Connect panels to MenuManager
+        SerializedObject mmSo = new SerializedObject(menuManager);
+        mmSo.FindProperty("mainMenuPanel").objectReferenceValue = mainPanel;
+        mmSo.FindProperty("settingsPanel").objectReferenceValue = settingsPanel;
+        mmSo.FindProperty("multiplayerPanel").objectReferenceValue = multiplayerPanel;
+        mmSo.ApplyModifiedProperties();
+        
+        CreateRequiredManagers();
+        
+        mainPanel.SetActive(true);
+        settingsPanel.SetActive(false);
+        multiplayerPanel.SetActive(false);
+        
+        Debug.Log("=== TUM MENULER KURULDU ===");
+        EditorUtility.DisplayDialog("Kurulum Tamamlandi!", 
+            "Tum menuler olusturuldu!\n\n" +
+            "- MainMenuPanel\n" +
+            "- SettingsPanel\n" +
+            "- MultiplayerPanel\n\n" +
+            "Sahneyi kaydetmeyi unutma!", "Tamam");
+    }
+    
+    [MenuItem("Tools/ECHOES/Menu Setup/2. Sadece MAIN MENU")]
+    public static void SetupOnlyMainMenu()
+    {
+        var (canvas, menuManager) = EnsureBasicSetup();
+        if (canvas == null) return;
+        
+        GameObject mainPanel = CreateMainMenuPanel(canvas.transform, menuManager);
+        
+        SerializedObject mmSo = new SerializedObject(menuManager);
+        mmSo.FindProperty("mainMenuPanel").objectReferenceValue = mainPanel;
+        mmSo.ApplyModifiedProperties();
+        
+        mainPanel.SetActive(true);
+        
+        Debug.Log("=== MAIN MENU KURULDU ===");
+        EditorUtility.DisplayDialog("Main Menu Kuruldu!", 
+            "MainMenuPanel yeniden olusturuldu!\n\n" +
+            "Sahneyi kaydetmeyi unutma!", "Tamam");
+    }
+    
+    [MenuItem("Tools/ECHOES/Menu Setup/3. Sadece SETTINGS")]
+    public static void SetupOnlySettings()
+    {
+        var (canvas, menuManager) = EnsureBasicSetup();
+        if (canvas == null) return;
+        
+        GameObject settingsPanel = CreateSettingsPanel(canvas.transform, menuManager);
+        
+        SerializedObject mmSo = new SerializedObject(menuManager);
+        mmSo.FindProperty("settingsPanel").objectReferenceValue = settingsPanel;
+        mmSo.ApplyModifiedProperties();
+        
+        settingsPanel.SetActive(true);
+        
+        Debug.Log("=== SETTINGS PANEL KURULDU ===");
+        EditorUtility.DisplayDialog("Settings Kuruldu!", 
+            "SettingsPanel yeniden olusturuldu!\n\n" +
+            "Sahneyi kaydetmeyi unutma!", "Tamam");
+    }
+    
+    [MenuItem("Tools/ECHOES/Menu Setup/4. Sadece MULTIPLAYER")]
+    public static void SetupOnlyMultiplayer()
+    {
+        var (canvas, menuManager) = EnsureBasicSetup();
+        if (canvas == null) return;
+        
+        GameObject multiplayerPanel = CreateMultiplayerPanel(canvas.transform, menuManager);
+        
+        SerializedObject mmSo = new SerializedObject(menuManager);
+        mmSo.FindProperty("multiplayerPanel").objectReferenceValue = multiplayerPanel;
+        mmSo.ApplyModifiedProperties();
+        
+        multiplayerPanel.SetActive(true);
+        
+        Debug.Log("=== MULTIPLAYER PANEL KURULDU ===");
+        EditorUtility.DisplayDialog("Multiplayer Kuruldu!", 
+            "MultiplayerPanel yeniden olusturuldu!\n\n" +
+            "Sahneyi kaydetmeyi unutma!", "Tamam");
+    }
+    
+    static (Canvas, MenuManager) EnsureBasicSetup()
+    {
+        // Check scene
         if (!UnityEngine.SceneManagement.SceneManager.GetActiveScene().name.Contains("MainMenu"))
         {
             if (!EditorUtility.DisplayDialog("Warning", "Bu MainMenu sahnesi degil gibi gorunuyor. Devam et?", "Evet", "Hayir"))
-                return;
+                return (null, null);
         }
         
         // Find or create Canvas
@@ -61,32 +153,7 @@ public class CompleteMenuSetup : Editor
             menuManager = mmObj.AddComponent<MenuManager>();
         }
         
-        // Create all panels - SEFFAF
-        GameObject mainPanel = CreateMainMenuPanel(canvas.transform, menuManager);
-        GameObject settingsPanel = CreateSettingsPanel(canvas.transform, menuManager);
-        GameObject multiplayerPanel = CreateMultiplayerPanel(canvas.transform, menuManager);
-        
-        // Connect panels to MenuManager
-        SerializedObject mmSo = new SerializedObject(menuManager);
-        mmSo.FindProperty("mainMenuPanel").objectReferenceValue = mainPanel;
-        mmSo.FindProperty("settingsPanel").objectReferenceValue = settingsPanel;
-        mmSo.FindProperty("multiplayerPanel").objectReferenceValue = multiplayerPanel;
-        mmSo.ApplyModifiedProperties();
-        
-        // Create managers
-        CreateRequiredManagers();
-        
-        // Set initial state
-        mainPanel.SetActive(true);
-        settingsPanel.SetActive(false);
-        multiplayerPanel.SetActive(false);
-        
-        Debug.Log("=== ECHOES MENU SETUP COMPLETE ===");
-        EditorUtility.DisplayDialog("Kurulum Tamamlandi!", 
-            "Tum menuler olusturuldu!\n\n" +
-            "SEFFAF paneller - Video gorunuyor!\n" +
-            "Ayni yazi tipi stili!\n\n" +
-            "Sahneyi kaydetmeyi unutma!", "Tamam");
+        return (canvas, menuManager);
     }
     
     static GameObject CreateMainMenuPanel(Transform parent, MenuManager menuManager)
@@ -119,55 +186,67 @@ public class CompleteMenuSetup : Editor
         Transform old = parent.Find("SettingsPanel");
         if (old != null) DestroyImmediate(old.gameObject);
         
+        // Ana panel - SEFFAF
         GameObject panel = CreateTransparentPanel(parent, "SettingsPanel");
         
-        // Renkler - resimdeki gibi
-        Color yellowGold = new Color(0.9f, 0.75f, 0.2f, 1f);
-        Color grayButton = new Color(0.35f, 0.35f, 0.35f, 1f);
-        Color selectedYellow = new Color(0.85f, 0.7f, 0.15f, 1f);
-        Color redButton = new Color(0.5f, 0.25f, 0.25f, 1f);
-        Color greenButton = new Color(0.25f, 0.4f, 0.25f, 1f);
+        // ===== YARI SEFFAF SIYAH ARKA PLAN ===== (1920x1080 icin buyuk)
+        GameObject bgPanel = new GameObject("BackgroundPanel");
+        bgPanel.transform.SetParent(panel.transform, false);
+        RectTransform bgRect = bgPanel.AddComponent<RectTransform>();
+        bgRect.anchorMin = new Vector2(0.5f, 0.5f);
+        bgRect.anchorMax = new Vector2(0.5f, 0.5f);
+        bgRect.sizeDelta = new Vector2(1100, 800); // 1920x1080 icin buyuk panel
+        bgRect.anchoredPosition = Vector2.zero;
+        Image bgImg = bgPanel.AddComponent<Image>();
+        bgImg.color = new Color(0f, 0f, 0f, 0.6f); // Yari seffaf siyah
         
-        // ===== SETTINGS Title =====
-        CreateSettingsText(panel.transform, "Title", "SETTINGS", 42, new Vector2(0, 220), textLight);
+        // Renkler
+        Color yellowGold = new Color(0.9f, 0.75f, 0.2f, 1f);
+        Color greenBtn = new Color(0.35f, 0.65f, 0.35f, 1f); // Yesil buton
+        Color greenBtnDark = new Color(0.25f, 0.5f, 0.25f, 1f); // Secilince koyu yesil
+        Color redButton = new Color(0.55f, 0.25f, 0.25f, 1f);
+        Color greenSaveBtn = new Color(0.25f, 0.45f, 0.25f, 1f);
+        
+        // ===== SETTINGS Title ===== (1920x1080)
+        CreateSettingsText(panel.transform, "Title", "SETTINGS", 84, new Vector2(0, 340), textLight);
         
         // ===== GRAPHICS Section =====
-        CreateSettingsText(panel.transform, "GraphicsLabel", "GRAPHICS", 18, new Vector2(-280, 160), textLight);
+        CreateSettingsText(panel.transform, "GraphicsLabel", "GRAPHICS", 38, new Vector2(-470, 240), textLight);
         
-        // Graphics quality buttons (FAST, NORMAL, HIGH)
-        CreateQualityButton(panel.transform, "FastBtn", "FAST", new Vector2(-40, 160), grayButton);
-        CreateQualityButton(panel.transform, "NormalBtn", "NORMAL", new Vector2(100, 160), selectedYellow);
-        CreateQualityButton(panel.transform, "HighBtn", "HIGH", new Vector2(240, 160), grayButton);
+        // Graphics quality buttons - HEPSI YESIL (secilince koyulasir)
+        CreateGreenQualityButton(panel.transform, "FastBtn", "FAST", new Vector2(-100, 240), greenBtn, greenBtnDark, 180, 60, 28);
+        CreateGreenQualityButton(panel.transform, "NormalBtn", "NORMAL", new Vector2(120, 240), greenBtn, greenBtnDark, 180, 60, 28);
+        CreateGreenQualityButton(panel.transform, "HighBtn", "HIGH", new Vector2(340, 240), greenBtn, greenBtnDark, 180, 60, 28);
         
         // ===== AUDIO Section =====
-        CreateSettingsText(panel.transform, "AudioLabel", "AUDIO", 18, new Vector2(-280, 100), textLight);
+        CreateSettingsText(panel.transform, "AudioLabel", "AUDIO", 38, new Vector2(-470, 140), textLight);
         
-        // Master slider
-        CreateSettingsText(panel.transform, "MasterLabel", "Master", 14, new Vector2(-280, 60), textLight);
-        CreateYellowSlider(panel.transform, "MasterSlider", new Vector2(60, 60), 1f);
-        CreateSettingsText(panel.transform, "MasterValue", "100%", 14, new Vector2(300, 60), textLight);
+        // Master slider - 1920x1080
+        CreateSettingsText(panel.transform, "MasterLabel", "Master", 32, new Vector2(-470, 80), textLight);
+        CreateYellowSlider(panel.transform, "MasterSlider", new Vector2(60, 80), 1f, 580, 38);
+        CreateSettingsText(panel.transform, "MasterValue", "100%", 32, new Vector2(460, 80), textLight);
         
         // Music slider
-        CreateSettingsText(panel.transform, "MusicLabel", "Music", 14, new Vector2(-280, 20), textLight);
-        CreateYellowSlider(panel.transform, "MusicSlider", new Vector2(60, 20), 0.74f);
-        CreateSettingsText(panel.transform, "MusicValue", "74%", 14, new Vector2(300, 20), textLight);
+        CreateSettingsText(panel.transform, "MusicLabel", "Music", 32, new Vector2(-470, 10), textLight);
+        CreateYellowSlider(panel.transform, "MusicSlider", new Vector2(60, 10), 0.74f, 580, 38);
+        CreateSettingsText(panel.transform, "MusicValue", "74%", 32, new Vector2(460, 10), textLight);
         
         // Effects slider
-        CreateSettingsText(panel.transform, "EffectsLabel", "Effects", 14, new Vector2(-280, -20), textLight);
-        CreateYellowSlider(panel.transform, "EffectsSlider", new Vector2(60, -20), 1f);
-        CreateSettingsText(panel.transform, "EffectsValue", "100%", 14, new Vector2(300, -20), textLight);
+        CreateSettingsText(panel.transform, "EffectsLabel", "Effects", 32, new Vector2(-470, -60), textLight);
+        CreateYellowSlider(panel.transform, "EffectsSlider", new Vector2(60, -60), 1f, 580, 38);
+        CreateSettingsText(panel.transform, "EffectsValue", "100%", 32, new Vector2(460, -60), textLight);
         
         // ===== MOUSE Section =====
-        CreateSettingsText(panel.transform, "MouseLabel", "MOUSE", 18, new Vector2(-280, -80), textLight);
+        CreateSettingsText(panel.transform, "MouseLabel", "MOUSE", 38, new Vector2(-470, -150), textLight);
         
         // Sensitivity slider
-        CreateSettingsText(panel.transform, "SensLabel", "Sensitivity", 14, new Vector2(-280, -120), textLight);
-        CreateYellowSlider(panel.transform, "SensitivitySlider", new Vector2(60, -120), 0.5f);
-        CreateSettingsText(panel.transform, "SensValue", "1.0x", 14, new Vector2(300, -120), textLight);
+        CreateSettingsText(panel.transform, "SensLabel", "Sensitivity", 32, new Vector2(-470, -220), textLight);
+        CreateYellowSlider(panel.transform, "SensitivitySlider", new Vector2(60, -220), 0.5f, 580, 38);
+        CreateSettingsText(panel.transform, "SensValue", "1.0x", 32, new Vector2(460, -220), textLight);
         
-        // ===== BACK and SAVE Buttons =====
-        CreateColoredButton(panel.transform, "BackButton", "BACK", new Vector2(-80, -200), redButton);
-        CreateColoredButton(panel.transform, "SaveButton", "SAVE", new Vector2(120, -200), greenButton);
+        // ===== BACK and SAVE Buttons ===== 1920x1080
+        CreateColoredButton(panel.transform, "BackButton", "BACK", new Vector2(-150, -330), redButton, 260, 70, 34);
+        CreateColoredButton(panel.transform, "SaveButton", "SAVE", new Vector2(190, -330), greenSaveBtn, 260, 70, 34);
         
         // Connect Back button to MenuManager
         GameObject backBtn = panel.transform.Find("BackButton").gameObject;
@@ -196,6 +275,48 @@ public class CompleteMenuSetup : Editor
         so.ApplyModifiedProperties();
         
         return panel;
+    }
+    
+    static GameObject CreateGreenQualityButton(Transform parent, string name, string text, Vector2 position, Color normalColor, Color pressedColor, float width = 160, float height = 50, int fontSize = 24)
+    {
+        GameObject btnObj = new GameObject(name);
+        btnObj.transform.SetParent(parent, false);
+        
+        RectTransform rect = btnObj.AddComponent<RectTransform>();
+        rect.sizeDelta = new Vector2(width, height);
+        rect.anchoredPosition = position;
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        
+        Image img = btnObj.AddComponent<Image>();
+        img.color = normalColor;
+        
+        Button btn = btnObj.AddComponent<Button>();
+        ColorBlock colors = btn.colors;
+        colors.normalColor = Color.white;
+        colors.highlightedColor = new Color(0.9f, 0.9f, 0.9f, 1f);
+        colors.pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f); // Basinca koyulasma
+        colors.selectedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
+        btn.colors = colors;
+        
+        // Button text
+        GameObject textObj = new GameObject("Text");
+        textObj.transform.SetParent(btnObj.transform, false);
+        
+        RectTransform textRect = textObj.AddComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = Vector2.zero;
+        textRect.offsetMax = Vector2.zero;
+        
+        TextMeshProUGUI tmp = textObj.AddComponent<TextMeshProUGUI>();
+        tmp.text = text;
+        tmp.fontSize = fontSize;
+        tmp.fontStyle = FontStyles.Bold;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color = Color.white;
+        
+        return btnObj;
     }
     
     static GameObject CreateMultiplayerPanel(Transform parent, MenuManager menuManager)
@@ -547,13 +668,13 @@ public class CompleteMenuSetup : Editor
         return textObj;
     }
     
-    static GameObject CreateQualityButton(Transform parent, string name, string text, Vector2 position, Color bgColor)
+    static GameObject CreateQualityButton(Transform parent, string name, string text, Vector2 position, Color bgColor, float width = 120, float height = 35, int fontSize = 16)
     {
         GameObject btnObj = new GameObject(name);
         btnObj.transform.SetParent(parent, false);
         
         RectTransform rect = btnObj.AddComponent<RectTransform>();
-        rect.sizeDelta = new Vector2(120, 35);
+        rect.sizeDelta = new Vector2(width, height);
         rect.anchoredPosition = position;
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);
@@ -575,14 +696,14 @@ public class CompleteMenuSetup : Editor
         
         TextMeshProUGUI tmp = textObj.AddComponent<TextMeshProUGUI>();
         tmp.text = text;
-        tmp.fontSize = 16;
+        tmp.fontSize = fontSize;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.color = Color.white;
         
         return btnObj;
     }
     
-    static GameObject CreateYellowSlider(Transform parent, string name, Vector2 position, float defaultValue)
+    static GameObject CreateYellowSlider(Transform parent, string name, Vector2 position, float defaultValue, float width = 350, float height = 20)
     {
         Color yellowGold = new Color(0.9f, 0.75f, 0.2f, 1f);
         Color grayBg = new Color(0.25f, 0.25f, 0.25f, 1f);
@@ -591,7 +712,7 @@ public class CompleteMenuSetup : Editor
         sliderObj.transform.SetParent(parent, false);
         
         RectTransform rect = sliderObj.AddComponent<RectTransform>();
-        rect.sizeDelta = new Vector2(350, 20);
+        rect.sizeDelta = new Vector2(width, height);
         rect.anchoredPosition = position;
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);
@@ -654,13 +775,13 @@ public class CompleteMenuSetup : Editor
         return sliderObj;
     }
     
-    static GameObject CreateColoredButton(Transform parent, string name, string text, Vector2 position, Color bgColor)
+    static GameObject CreateColoredButton(Transform parent, string name, string text, Vector2 position, Color bgColor, float width = 160, float height = 45, int fontSize = 20)
     {
         GameObject btnObj = new GameObject(name);
         btnObj.transform.SetParent(parent, false);
         
         RectTransform rect = btnObj.AddComponent<RectTransform>();
-        rect.sizeDelta = new Vector2(160, 45);
+        rect.sizeDelta = new Vector2(width, height);
         rect.anchoredPosition = position;
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);
@@ -687,7 +808,7 @@ public class CompleteMenuSetup : Editor
         
         TextMeshProUGUI tmp = textObj.AddComponent<TextMeshProUGUI>();
         tmp.text = text;
-        tmp.fontSize = 20;
+        tmp.fontSize = fontSize;
         tmp.fontStyle = FontStyles.Bold;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.color = Color.white;

@@ -47,9 +47,56 @@ public class NetworkUI : MonoBehaviour
         if (backToMenuButton != null)
             backToMenuButton.onClick.AddListener(BackToMainMenu);
 
-        ShowMainMenuPanel();
+        // Check if coming from MultiplayerPanel (auto-started by MultiplayerManager)
+        if (GameModeManager.IsMultiplayer)
+        {
+            Debug.Log("[NetworkUI] Multiplayer mode detected - waiting for network start...");
+            StartCoroutine(WaitForNetworkStart());
+        }
+        else
+        {
+            ShowMainMenuPanel();
+        }
         
         Debug.Log("[NetworkUI] Initialized");
+    }
+    
+    System.Collections.IEnumerator WaitForNetworkStart()
+    {
+        // Wait a few frames for MultiplayerManager to start the network
+        float timeout = 2f;
+        float waited = 0f;
+        
+        while (waited < timeout)
+        {
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            {
+                // Network is running - go directly to HUD
+                isConnected = true;
+                ShowHUDPanel();
+                Debug.Log("[NetworkUI] Network auto-started - showing HUD!");
+                yield break;
+            }
+            
+            yield return new WaitForSeconds(0.1f);
+            waited += 0.1f;
+        }
+        
+        // Timeout - show main menu panel as fallback
+        Debug.LogWarning("[NetworkUI] Network did not start in time - showing main menu");
+        ShowMainMenuPanel();
+    }
+    
+    void ShowHUDPanel()
+    {
+        if (mainMenuPanel != null) mainMenuPanel.SetActive(false);
+        if (lobbyPanel != null) lobbyPanel.SetActive(false);
+        if (hudPanel != null) hudPanel.SetActive(true);
+        
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+        
+        Debug.Log("[NetworkUI] Showing HUD Panel - Game active!");
     }
 
     void Update()

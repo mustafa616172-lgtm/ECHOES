@@ -97,7 +97,52 @@ public class SinglePlayerManager : MonoBehaviour
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
         
+        // Hide any MainMenu UI that might be lingering
+        HideMainMenuUI();
+        
         Debug.Log("[SinglePlayerManager] === PLAYER SPAWNED - READY TO PLAY! ===");
+    }
+    
+    void HideMainMenuUI()
+    {
+        // Find and disable MenuManager if present
+        MenuManager menuManager = FindObjectOfType<MenuManager>();
+        if (menuManager != null)
+        {
+            Debug.Log("[SinglePlayerManager] Hiding MenuManager canvas");
+            Canvas canvas = menuManager.GetComponentInParent<Canvas>();
+            if (canvas != null) canvas.gameObject.SetActive(false);
+            menuManager.gameObject.SetActive(false);
+        }
+        
+        // Find and disable any MainMenu related objects
+        GameObject mainMenuPanel = GameObject.Find("MainMenuPanel");
+        if (mainMenuPanel != null)
+        {
+            mainMenuPanel.SetActive(false);
+            Debug.Log("[SinglePlayerManager] Hid MainMenuPanel");
+        }
+        
+        // Hide NetworkUI panels if present
+        NetworkUI networkUI = FindObjectOfType<NetworkUI>();
+        if (networkUI != null)
+        {
+            if (networkUI.mainMenuPanel != null) networkUI.mainMenuPanel.SetActive(false);
+            if (networkUI.lobbyPanel != null) networkUI.lobbyPanel.SetActive(false);
+            Debug.Log("[SinglePlayerManager] Hid NetworkUI panels");
+        }
+        
+        // Disable any other canvases that look like menus
+        Canvas[] allCanvases = FindObjectsOfType<Canvas>();
+        foreach (Canvas c in allCanvases)
+        {
+            if (c.gameObject.name.ToLower().Contains("menu") || 
+                c.gameObject.name.ToLower().Contains("main"))
+            {
+                c.gameObject.SetActive(false);
+                Debug.Log("[SinglePlayerManager] Disabled menu canvas: " + c.gameObject.name);
+            }
+        }
     }
     
     void CreatePlayer(Vector3 position)
@@ -146,6 +191,9 @@ public class SinglePlayerManager : MonoBehaviour
         controller.runSpeed = 8f;
         controller.jumpForce = 7f;
         controller.mouseSensitivity = 2f;
+        
+        // Add pause menu for ESC functionality
+        currentPlayer.AddComponent<SinglePlayerPauseMenu>();
         
         Debug.Log("[SinglePlayerManager] Player created at: " + position);
     }

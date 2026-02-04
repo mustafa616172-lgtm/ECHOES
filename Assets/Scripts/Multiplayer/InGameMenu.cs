@@ -28,6 +28,16 @@ public class InGameMenu : MonoBehaviour
 
     void Start()
     {
+        // ONLY work in Multiplayer mode - disable completely otherwise
+        if (!GameModeManager.IsMultiplayer)
+        {
+            Debug.Log("[InGameMenu] Not in Multiplayer mode - disabling InGameMenu");
+            if (menuPanel != null)
+                menuPanel.SetActive(false);
+            enabled = false;
+            return;
+        }
+        
         networkManager = NetworkManager.Singleton;
         
         if (exitButton != null)
@@ -39,11 +49,15 @@ public class InGameMenu : MonoBehaviour
         // Start with menu closed
         CloseMenu();
         
-        Debug.Log("[InGameMenu] Initialized");
+        Debug.Log("[InGameMenu] Initialized (Multiplayer mode)");
     }
 
     void Update()
     {
+        // Double-check: only work in Multiplayer mode
+        if (!GameModeManager.IsMultiplayer)
+            return;
+        
         // ESC key toggles menu
         if (Input.GetKeyDown(KeyCode.Escape))
         {

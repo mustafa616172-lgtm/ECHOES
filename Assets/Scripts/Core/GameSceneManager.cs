@@ -125,6 +125,7 @@ public class GameSceneManager : MonoBehaviour
         else
         {
             Debug.LogError("[GameSceneManager] NetworkManager not found!");
+            return;
         }
         
         // Disable SinglePlayerManager
@@ -135,11 +136,32 @@ public class GameSceneManager : MonoBehaviour
             Debug.Log("[GameSceneManager] SinglePlayerManager DISABLED");
         }
         
-        // Enable MultiplayerManager
-        if (multiplayerManagerObject != null)
+        // Find or create MultiplayerManager
+        if (multiplayerManagerObject == null)
         {
-            multiplayerManagerObject.SetActive(true);
-            Debug.Log("[GameSceneManager] MultiplayerManager ENABLED");
+            var existingMM = FindObjectOfType<MultiplayerManager>();
+            if (existingMM != null)
+            {
+                multiplayerManagerObject = existingMM.gameObject;
+            }
+            else
+            {
+                // Create new MultiplayerManager
+                Debug.Log("[GameSceneManager] Creating new MultiplayerManager");
+                multiplayerManagerObject = new GameObject("MultiplayerManager");
+                multiplayerManagerObject.AddComponent<MultiplayerManager>();
+            }
+        }
+        
+        // Enable MultiplayerManager
+        multiplayerManagerObject.SetActive(true);
+        
+        // Ensure the component is enabled and Start gets called
+        var mmComponent = multiplayerManagerObject.GetComponent<MultiplayerManager>();
+        if (mmComponent != null)
+        {
+            mmComponent.enabled = true;
+            Debug.Log("[GameSceneManager] MultiplayerManager ENABLED and ready");
         }
         
         Debug.Log("[GameSceneManager] Multiplayer setup COMPLETE");
