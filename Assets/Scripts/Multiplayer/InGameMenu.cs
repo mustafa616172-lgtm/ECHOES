@@ -25,9 +25,19 @@ public class InGameMenu : MonoBehaviour
     
     private bool isMenuOpen = false;
     private NetworkManager networkManager;
+    private bool isInitialized = false;
 
     void Start()
     {
+        // Use delayed init to handle runtime creation
+        StartCoroutine(DelayedInit());
+    }
+    
+    System.Collections.IEnumerator DelayedInit()
+    {
+        // Wait a frame for references to be set via reflection
+        yield return null;
+        
         // ONLY work in Multiplayer mode - disable completely otherwise
         if (!GameModeManager.IsMultiplayer)
         {
@@ -35,7 +45,7 @@ public class InGameMenu : MonoBehaviour
             if (menuPanel != null)
                 menuPanel.SetActive(false);
             enabled = false;
-            return;
+            yield break;
         }
         
         networkManager = NetworkManager.Singleton;
@@ -47,13 +57,19 @@ public class InGameMenu : MonoBehaviour
             resumeButton.onClick.AddListener(OnResumeClicked);
         
         // Start with menu closed
-        CloseMenu();
+        if (menuPanel != null)
+            menuPanel.SetActive(false);
         
+        isInitialized = true;
         Debug.Log("[InGameMenu] Initialized (Multiplayer mode)");
     }
 
     void Update()
     {
+        // Don't process until initialized
+        if (!isInitialized)
+            return;
+        
         // Double-check: only work in Multiplayer mode
         if (!GameModeManager.IsMultiplayer)
             return;
@@ -61,6 +77,7 @@ public class InGameMenu : MonoBehaviour
         // ESC key toggles menu
         if (Input.GetKeyDown(KeyCode.Escape))
         {
+            Debug.Log("[InGameMenu] ESC pressed - toggling menu");
             ToggleMenu();
         }
         
@@ -176,13 +193,32 @@ public class InGameMenu : MonoBehaviour
         try
         {
             var host = System.Net.Dns.GetHostEntry(System.Net.Dns.GetHostName());
+            string hamachiIP = null;
+            string localIP = null;
+            
             foreach (var ip in host.AddressList)
             {
                 if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
                 {
-                    return ip.ToString();
+                    string ipStr = ip.ToString();
+                    
+                    // Hamachi IPs start with 25.x.x.x - prefer these
+                    if (ipStr.StartsWith("25."))
+                    {
+                        hamachiIP = ipStr;
+                    }
+                    else if (localIP == null)
+                    {
+                        localIP = ipStr;
+                    }
                 }
             }
+            
+            // Return Hamachi IP if found, otherwise local IP
+            if (!string.IsNullOrEmpty(hamachiIP))
+                return hamachiIP;
+            if (!string.IsNullOrEmpty(localIP))
+                return localIP;
         }
         catch (System.Exception) { }
         
