@@ -25,9 +25,20 @@ public class FlashlightController : MonoBehaviour
     [SerializeField] private float spotAngle = 50f; // INCREASED from 45 to 50
     
     [Header("Position Settings")]
-    [SerializeField] private Vector3 equippedPosition = new Vector3(0.4f, -0.3f, 0.6f); // More visible position
+    [SerializeField] private Vector3 equippedPosition = new Vector3(0.5f, -0.3f, 0.6f); // Closer to camera
     [SerializeField] private Vector3 equippedRotation = new Vector3(0f, 0f, 0f);
-    [SerializeField] private Vector3 unequippedPosition = new Vector3(0.4f, -2f, 0.6f); // Farther down
+    [SerializeField] private Vector3 unequippedPosition = new Vector3(0.5f, -2f, 0.6f); // Off screen
+    
+    [Header("Camera Tracking")]
+    [Tooltip("Follow camera rotation for realism")]
+    [SerializeField] private bool followCameraRotation = true;
+    [SerializeField] private Transform cameraLookTarget; // Will be found automatically
+    
+    [Header("Custom Model Settings")]
+    [Tooltip("Offset for your custom flashlight 3D model")]
+    [SerializeField] private Vector3 modelPositionOffset = Vector3.zero;
+    [SerializeField] private Vector3 modelRotationOffset = Vector3.zero;
+    [SerializeField] private Vector3 modelScale = Vector3.one;
     
     [Header("Darkness Compensation")]
     [Tooltip("Increases exposure when flashlight is on")]
@@ -45,148 +56,47 @@ public class FlashlightController : MonoBehaviour
     
     void Start()
     {
+        // 1. NUCLEAR CLEANUP: Destroy ALL children named "Flashlight" or related
+        // uniqueID check to ensure we don't kill ourselves if this script is on the duplicate (unlikely)
+        var allChildren = GetComponentsInChildren<Transform>(true);
+        foreach (var t in allChildren)
+        {
+            if (t != transform && (t.name == "Flashlight" || t.name == "FlashlightModel_TEMP" || t.name.Contains("Sphere")))
+            {
+                Destroy(t.gameObject);
+                Debug.LogWarning($"[FlashlightController] Nuclear cleanup: Destroyed {t.name}");
+            }
+        }
+        
+        // Also remove SimpleFlashlightTest component
+        var simpleTest = GetComponent("SimpleFlashlightTest");
+        if (simpleTest != null) Destroy(simpleTest);
+
+        flashlightObject = null; // Reset reference to force recreation
+        flashlightLight = null;
+
         SetupFlashlight();
         SetupVolumeProfile();
         
-        // Start equipped or unequipped based on setting
+        // Start equipped logic
         if (startEquipped)
         {
             isEquipped = true;
             targetPosition = equippedPosition;
             if (flashlightObject != null)
             {
-                flashlightObject.transform.localPosition = equippedPosition;
+                // Force position immediately (no animation on start)
+                // Need to convert local offset to world for new logic?
+                // Actually start logic sets localPosition initially, but Update overrides it with world position.
+                // To be safe, we let Update handle position, but set target for it.
             }
-            if (flashlightLight != null)
-            {
-                flashlightLight.enabled = true;
-            }
-            Debug.Log("[Flashlight] Started EQUIPPED (for testing visibility)");
+            if (flashlightLight != null) flashlightLight.enabled = true;
         }
         else
         {
             isEquipped = false;
             targetPosition = unequippedPosition;
-            if (flashlightObject != null)
-            {
-                flashlightObject.transform.localPosition = unequippedPosition;
-            }
-            Debug.Log("[Flashlight] Started unequipped");
         }
-        
-        Debug.Log("[Flashlight] Initialized - Press L to toggle");
-    }
-    
-    void SetupFlashlight()
-    {
-        // Find camera or camera root if not assigned
-        if (cameraTransform == null)
-        {
-            // Try to find main camera first
-            Camera cam = Camera.main;
-            if (cam != null)
-            {
-                cameraTransform = cam.transform;
-                Debug.Log("[Flashlight] Found Main Camera: " + cam.name);
-            }
-            else
-            {
-                // Try to find PlayerCameraRoot (for FirstPerson controller)
-                Transform cameraRoot = transform.Find("PlayerCameraRoot");
-                if (cameraRoot != null)
-                {
-                    cameraTransform = cameraRoot;
-                    Debug.Log("[Flashlight] Found PlayerCameraRoot");
-                }
-                else
-                {
-                    // Try to find any Camera in children
-                    cam = GetComponentInChildren<Camera>();
-                    if (cam != null)
-                    {
-                        cameraTransform = cam.transform;
-                        Debug.Log("[Flashlight] Found camera in children: " + cam.name);
-                    }
-                    else
-                    {
-                        Debug.LogError("[Flashlight] No camera or camera root found! Please assign cameraTransform manually.");
-                        enabled = false;
-                        return;
-                    }
-                }
-            }
-        }
-        
-        Debug.Log("[Flashlight] Camera transform set to: " + cameraTransform.name);
-        
-        // Create flashlight object if it doesn't exist
-        if (flashlightObject == null)
-        {
-            flashlightObject = new GameObject("Flashlight");
-            flashlightObject.transform.SetParent(cameraTransform);
-            flashlightObject.transform.localPosition = unequippedPosition;
-            flashlightObject.transform.localRotation = Quaternion.Euler(equippedRotation);
-            
-            // Create temporary visual (cube) - BIGGER AND MORE VISIBLE
-            GameObject tempModel = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            tempModel.name = "FlashlightModel_TEMP";
-            tempModel.transform.SetParent(flashlightObject.transform);
-            tempModel.transform.localPosition = Vector3.zero;
-            tempModel.transform.localRotation = Quaternion.identity;
-            tempModel.transform.localScale = new Vector3(0.08f, 0.08f, 0.3f); // BIGGER - was 0.05, 0.05, 0.2
-            
-            // Set layer to avoid blocking camera
-            tempModel.layer = LayerMask.NameToLayer("Ignore Raycast");
-            if (tempModel.layer == -1) tempModel.layer = 2; // Default to Ignore Raycast layer
-            
-            // Remove collider
-            Collider col = tempModel.GetComponent<Collider>();
-            if (col != null) Destroy(col);
-            
-            Debug.Log("[Flashlight] Created temporary flashlight model (yellow GLOWING cube)");
-            
-            // Make it GLOW - emissive yellow
-            MeshRenderer renderer = tempModel.GetComponent<MeshRenderer>();
-            if (renderer != null)
-            {
-                Material mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-                mat.color = Color.yellow;
-                
-                // Enable emission for glow
-                mat.EnableKeyword("_EMISSION");
-                mat.SetColor("_EmissionColor", Color.yellow * 2f); // Bright yellow glow
-                
-                renderer.material = mat;
-                Debug.Log("[Flashlight] Applied GLOWING yellow material");
-            }
-        }
-        
-        // Create or get spotlight
-        if (flashlightLight == null)
-        {
-            flashlightLight = flashlightObject.GetComponentInChildren<Light>();
-            
-            if (flashlightLight == null)
-            {
-                GameObject lightObj = new GameObject("Light");
-                lightObj.transform.SetParent(flashlightObject.transform);
-                lightObj.transform.localPosition = Vector3.zero;
-                lightObj.transform.localRotation = Quaternion.identity;
-                
-                flashlightLight = lightObj.AddComponent<Light>();
-            }
-        }
-        
-        // Configure spotlight
-        flashlightLight.type = LightType.Spot;
-        flashlightLight.color = lightColor;
-        flashlightLight.intensity = lightIntensity;
-        flashlightLight.range = lightRange;
-        flashlightLight.spotAngle = spotAngle;
-        flashlightLight.shadows = LightShadows.Soft;
-        flashlightLight.enabled = false; // Start disabled
-        
-        Debug.Log("[Flashlight] Flashlight setup complete!");
     }
     
     void SetupVolumeProfile()
@@ -204,23 +114,93 @@ public class FlashlightController : MonoBehaviour
             }
         }
     }
-    
-    void Update()
+
+    void SetupFlashlight()
     {
-        // Toggle flashlight with L key
-        if (Input.GetKeyDown(toggleKey))
+        cameraTransform = transform;
+        
+        // Create flashlight object (Always create fresh after cleanup)
+        if (flashlightObject == null)
         {
-            ToggleFlashlight();
+            flashlightObject = new GameObject("Flashlight");
+            flashlightObject.transform.SetParent(cameraTransform);
+            
+            // Create visual
+            GameObject tempModel = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            tempModel.name = "FlashlightModel_TEMP";
+            tempModel.transform.SetParent(flashlightObject.transform);
+            tempModel.transform.localPosition = Vector3.zero;
+            tempModel.transform.localScale = Vector3.one * 0.15f; // Slightly smaller
+            
+            // Remove collider
+            if (tempModel.GetComponent<Collider>()) Destroy(tempModel.GetComponent<Collider>());
+            
+            // Glow Material
+            var renderer = tempModel.GetComponent<MeshRenderer>();
+            if (renderer)
+            {
+                Material mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                mat.color = Color.yellow;
+                mat.EnableKeyword("_EMISSION");
+                mat.SetColor("_EmissionColor", Color.yellow * 5f);
+                renderer.material = mat;
+            }
         }
         
-        // Smooth position animation
-        if (flashlightObject != null)
+        // Light
+        if (flashlightLight == null)
         {
-            flashlightObject.transform.localPosition = Vector3.Lerp(
-                flashlightObject.transform.localPosition,
-                targetPosition,
-                Time.deltaTime * equipSpeed
+            GameObject lightObj = new GameObject("Light");
+            lightObj.transform.SetParent(flashlightObject.transform);
+            lightObj.transform.localPosition = Vector3.zero;
+            lightObj.transform.localRotation = Quaternion.identity;
+            flashlightLight = lightObj.AddComponent<Light>();
+        }
+        
+        flashlightLight.type = LightType.Spot;
+        flashlightLight.intensity = lightIntensity;
+        flashlightLight.range = lightRange;
+        flashlightLight.spotAngle = spotAngle;
+        flashlightLight.enabled = false;
+    }
+
+    void Update()
+    {
+        // CONSTANTLY check for camera
+        if (cameraLookTarget == null)
+        {
+            if (Camera.main != null) cameraLookTarget = Camera.main.transform;
+            return; // Don't update if no camera
+        }
+    
+        // Toggle input
+        if (Input.GetKeyDown(toggleKey)) ToggleFlashlight();
+        
+        if (flashlightObject != null && cameraLookTarget != null)
+        {
+            // --- WORLD SPACE LOCKING ONLY ---
+            // We calculate where the flashlight SHOULD be relative to Camera
+            Vector3 desiredWorldPos = cameraLookTarget.TransformPoint(targetPosition);
+            
+            // We smoothly move the ACTUAL flashlight (parented to Player) to that world point
+            flashlightObject.transform.position = Vector3.Lerp(
+                flashlightObject.transform.position,
+                desiredWorldPos,
+                Time.deltaTime * 20f
             );
+            
+            // Rotation Tracking
+            if (followCameraRotation)
+            {
+                Quaternion targetRot = cameraLookTarget.rotation * Quaternion.Euler(modelRotationOffset);
+                flashlightObject.transform.rotation = Quaternion.Slerp(
+                    flashlightObject.transform.rotation,
+                    targetRot,
+                    Time.deltaTime * 25f
+                );
+            }
+            
+            if (flashlightLight != null) flashlightLight.transform.rotation = flashlightObject.transform.rotation;
         }
     }
     
@@ -287,6 +267,16 @@ public class FlashlightController : MonoBehaviour
         {
             ToggleFlashlight();
         }
+        }
+
+    void OnDrawGizmos()
+    {
+        if (showDebugGizmos && flashlightObject != null)
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(flashlightObject.transform.position, 0.2f);
+            Gizmos.DrawLine(transform.position, flashlightObject.transform.position);
+        }
     }
     
     public void ForceUnequip()
@@ -317,9 +307,13 @@ public class FlashlightController : MonoBehaviour
         // Instantiate new model
         GameObject newModel = Instantiate(modelPrefab, flashlightObject.transform);
         newModel.name = "FlashlightModel";
-        newModel.transform.localPosition = Vector3.zero;
-        newModel.transform.localRotation = Quaternion.identity;
         
-        Debug.Log("[Flashlight] Model replaced with: " + modelPrefab.name);
+        // Apply offsets for perfect positioning
+        newModel.transform.localPosition = modelPositionOffset;
+        newModel.transform.localRotation = Quaternion.Euler(modelRotationOffset);
+        newModel.transform.localScale = modelScale;
+        
+        Debug.Log($"[Flashlight] Model replaced: {modelPrefab.name}");
+        Debug.Log($"[Flashlight] Applied offsets - Pos: {modelPositionOffset}, Rot: {modelRotationOffset}, Scale: {modelScale}");
     }
 }
