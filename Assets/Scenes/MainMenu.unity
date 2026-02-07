@@ -946,6 +946,7 @@ GameObject:
   - component: {fileID: 80987415}
   - component: {fileID: 80987414}
   - component: {fileID: 80987413}
+  - component: {fileID: 80987416}
   m_Layer: 0
   m_Name: BackButton
   m_TagString: Untagged
@@ -1067,6 +1068,29 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 80987411}
   m_CullTransparentMesh: 1
+--- !u!114 &80987416
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 80987411}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5203905a2d10a0247b79e14d462460de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MenuButtonEffect
+  buttonText: {fileID: 667418604}
+  normalColor: {r: 1, g: 1, b: 1, a: 1}
+  hoverColor: {r: 0.754717, g: 0.4236383, b: 0.4236383, a: 1}
+  hoverScale: 1.1
+  enableGlowEffect: 1
+  glowColor: {r: 1, g: 1, b: 1, a: 1}
+  glowOuter: 0.5
+  glowPower: 1.2
+  audioSource: {fileID: 1689945026}
+  hoverSound: {fileID: 8300000, guid: fcd7db15cfca2d546a80a37df6d93aa4, type: 3}
+  clickSound: {fileID: 8300000, guid: ac05aa6be92168249b131cf6d0da737b, type: 3}
 --- !u!1 &129410637
 GameObject:
   m_ObjectHideFlags: 0
@@ -5419,6 +5443,7 @@ GameObject:
   - component: {fileID: 928042395}
   - component: {fileID: 928042394}
   - component: {fileID: 928042393}
+  - component: {fileID: 928042396}
   m_Layer: 0
   m_Name: HostButton
   m_TagString: Untagged
@@ -5540,6 +5565,29 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 928042391}
   m_CullTransparentMesh: 1
+--- !u!114 &928042396
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 928042391}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5203905a2d10a0247b79e14d462460de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MenuButtonEffect
+  buttonText: {fileID: 1451790375}
+  normalColor: {r: 1, g: 1, b: 1, a: 1}
+  hoverColor: {r: 0.754717, g: 0.4236383, b: 0.4236383, a: 1}
+  hoverScale: 1.1
+  enableGlowEffect: 1
+  glowColor: {r: 1, g: 1, b: 1, a: 1}
+  glowOuter: 0.5
+  glowPower: 1.2
+  audioSource: {fileID: 1689945026}
+  hoverSound: {fileID: 8300000, guid: fcd7db15cfca2d546a80a37df6d93aa4, type: 3}
+  clickSound: {fileID: 8300000, guid: ac05aa6be92168249b131cf6d0da737b, type: 3}
 --- !u!1 &936830390
 GameObject:
   m_ObjectHideFlags: 0
@@ -5707,17 +5755,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5203905a2d10a0247b79e14d462460de, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonEffect
-  buttonText: {fileID: 0}
-  normalColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-  hoverColor: {r: 1, g: 1, b: 1, a: 1}
+  buttonText: {fileID: 658284575}
+  normalColor: {r: 1, g: 1, b: 1, a: 1}
+  hoverColor: {r: 0.754717, g: 0.4236383, b: 0.4236383, a: 1}
   hoverScale: 1.1
   enableGlowEffect: 1
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowOuter: 0.5
   glowPower: 1.2
-  audioSource: {fileID: 0}
-  hoverSound: {fileID: 0}
-  clickSound: {fileID: 0}
+  audioSource: {fileID: 1689945026}
+  hoverSound: {fileID: 8300000, guid: fcd7db15cfca2d546a80a37df6d93aa4, type: 3}
+  clickSound: {fileID: 8300000, guid: ac05aa6be92168249b131cf6d0da737b, type: 3}
 --- !u!1 &952083318
 GameObject:
   m_ObjectHideFlags: 0
@@ -10999,6 +11047,7 @@ GameObject:
   - component: {fileID: 1917227024}
   - component: {fileID: 1917227023}
   - component: {fileID: 1917227022}
+  - component: {fileID: 1917227025}
   m_Layer: 0
   m_Name: JoinButton
   m_TagString: Untagged
@@ -11108,6 +11157,29 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1917227020}
   m_CullTransparentMesh: 1
+--- !u!114 &1917227025
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1917227020}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5203905a2d10a0247b79e14d462460de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MenuButtonEffect
+  buttonText: {fileID: 423437527}
+  normalColor: {r: 1, g: 1, b: 1, a: 1}
+  hoverColor: {r: 0.754717, g: 0.4236383, b: 0.4236383, a: 1}
+  hoverScale: 1.1
+  enableGlowEffect: 1
+  glowColor: {r: 1, g: 1, b: 1, a: 1}
+  glowOuter: 0.5
+  glowPower: 1.2
+  audioSource: {fileID: 1689945026}
+  hoverSound: {fileID: 8300000, guid: fcd7db15cfca2d546a80a37df6d93aa4, type: 3}
+  clickSound: {fileID: 8300000, guid: ac05aa6be92168249b131cf6d0da737b, type: 3}
 --- !u!1 &1920037186
 GameObject:
   m_ObjectHideFlags: 0
@@ -11529,6 +11601,7 @@ GameObject:
   - component: {fileID: 1972190599}
   - component: {fileID: 1972190598}
   - component: {fileID: 1972190597}
+  - component: {fileID: 1972190601}
   m_Layer: 0
   m_Name: MULTIPLAYERButton
   m_TagString: Untagged
@@ -11670,6 +11743,29 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1972190595}
   m_CullTransparentMesh: 1
+--- !u!114 &1972190601
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1972190595}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5203905a2d10a0247b79e14d462460de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MenuButtonEffect
+  buttonText: {fileID: 1102387327}
+  normalColor: {r: 1, g: 1, b: 1, a: 1}
+  hoverColor: {r: 0.754717, g: 0.4236383, b: 0.4236383, a: 1}
+  hoverScale: 1.1
+  enableGlowEffect: 1
+  glowColor: {r: 1, g: 1, b: 1, a: 1}
+  glowOuter: 0.5
+  glowPower: 1.2
+  audioSource: {fileID: 1689945026}
+  hoverSound: {fileID: 8300000, guid: fcd7db15cfca2d546a80a37df6d93aa4, type: 3}
+  clickSound: {fileID: 8300000, guid: ac05aa6be92168249b131cf6d0da737b, type: 3}
 --- !u!1 &1979671558
 GameObject:
   m_ObjectHideFlags: 0
@@ -12314,6 +12410,7 @@ GameObject:
   - component: {fileID: 2049247459}
   - component: {fileID: 2049247458}
   - component: {fileID: 2049247457}
+  - component: {fileID: 2049247461}
   m_Layer: 0
   m_Name: "GER\u0130Button"
   m_TagString: Untagged
@@ -12455,6 +12552,29 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2049247455}
   m_CullTransparentMesh: 1
+--- !u!114 &2049247461
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2049247455}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5203905a2d10a0247b79e14d462460de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MenuButtonEffect
+  buttonText: {fileID: 256342395}
+  normalColor: {r: 1, g: 1, b: 1, a: 1}
+  hoverColor: {r: 0.754717, g: 0.4236383, b: 0.4236383, a: 1}
+  hoverScale: 1.1
+  enableGlowEffect: 1
+  glowColor: {r: 1, g: 1, b: 1, a: 1}
+  glowOuter: 0.5
+  glowPower: 1.2
+  audioSource: {fileID: 1689945026}
+  hoverSound: {fileID: 8300000, guid: fcd7db15cfca2d546a80a37df6d93aa4, type: 3}
+  clickSound: {fileID: 8300000, guid: ac05aa6be92168249b131cf6d0da737b, type: 3}
 --- !u!1 &2053659099
 GameObject:
   m_ObjectHideFlags: 0
