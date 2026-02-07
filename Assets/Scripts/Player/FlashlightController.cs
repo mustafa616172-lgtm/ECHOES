@@ -1,319 +1,229 @@
 using UnityEngine;
+using System.Collections;
 
-/// <summary>
-/// ECHOES - Flashlight Controller
-/// The Forest style flashlight system - Press L to equip/unequip
-/// Supports model replacement and dynamic lighting
-/// </summary>
 public class FlashlightController : MonoBehaviour
 {
-    [Header("Controls")]
-    [SerializeField] private KeyCode toggleKey = KeyCode.L;
+    [Header("Işık Ayarları")]
+    public Transform lightOrigin;   // Işığın çıkacağı nokta (modelin ucu)
+    private Light flashlight;       // Otomatik oluşturulacak tek ışık
     
-    [Header("Debug Options")]
-    [SerializeField] private bool startEquipped = true; // Start with flashlight ON
-    [SerializeField] private bool showDebugGizmos = true; // Show position in Scene view
+    [Header("Tuş Ayarları")]
+    public KeyCode toggleKey = KeyCode.L;
     
-    [Header("Flashlight Settings")]
-    [SerializeField] private bool isEquipped = false;
-    [SerializeField] private float equipSpeed = 5f;
+    [Header("Batarya Ayarları")]
+    public float maxBattery = 100f;
+    public float batteryDrainRate = 2f;
+    public float currentBattery;
+    public bool hasInfiniteBattery = false;
     
-    [Header("Light Settings")]
-    [SerializeField] private Color lightColor = new Color(1f, 0.95f, 0.85f); // Warm white
-    [SerializeField] private float lightIntensity = 8f; // INCREASED from 3 to 8
-    [SerializeField] private float lightRange = 20f; // INCREASED from 15 to 20
-    [SerializeField] private float spotAngle = 50f; // INCREASED from 45 to 50
+    [Header("Animasyon Ayarları")]
+    public float turnOnSpeed = 8f;
+    public float flickerChance = 0.3f;
+    public AudioClip toggleOnSound;
+    public AudioClip toggleOffSound;
+    public AudioClip flickerSound;
     
-    [Header("Position Settings")]
-    [SerializeField] private Vector3 equippedPosition = new Vector3(0.5f, -0.3f, 0.6f); // Closer to camera
-    [SerializeField] private Vector3 equippedRotation = new Vector3(0f, 0f, 0f);
-    [SerializeField] private Vector3 unequippedPosition = new Vector3(0.5f, -2f, 0.6f); // Off screen
+    [Header("The Forest Tarzı Ayarlar")]
+    public float spotAngle = 70f;
+    public float spotRange = 20f;
+    public float lightIntensity = 2f;
+    public Color lightColor = new Color(1f, 0.95f, 0.8f);
     
-    [Header("Camera Tracking")]
-    [Tooltip("Follow camera rotation for realism")]
-    [SerializeField] private bool followCameraRotation = true;
-    [SerializeField] private Transform cameraLookTarget; // Will be found automatically
-    
-    [Header("Custom Model Settings")]
-    [Tooltip("Offset for your custom flashlight 3D model")]
-    [SerializeField] private Vector3 modelPositionOffset = Vector3.zero;
-    [SerializeField] private Vector3 modelRotationOffset = Vector3.zero;
-    [SerializeField] private Vector3 modelScale = Vector3.one;
-    
-    [Header("Darkness Compensation")]
-    [Tooltip("Increases exposure when flashlight is on")]
-    [SerializeField] private bool adjustExposure = true;
-    [SerializeField] private float exposureBoost = 1.0f; // INCREASED from 0.5 to 1.0
-    
-    [Header("References (Auto-Setup)")]
-    [SerializeField] private Transform cameraTransform;
-    [SerializeField] private GameObject flashlightObject;
-    [SerializeField] private Light flashlightLight;
-    
-    private Vector3 targetPosition;
-    private float originalExposure = -1.5f;
-    private UnityEngine.Rendering.Universal.ColorAdjustments colorAdjustments;
+    private bool isOn = false;
+    private float targetIntensity;
+    private float currentIntensity;
+    private AudioSource audioSource;
+    private Coroutine flickerCoroutine;
     
     void Start()
     {
-        // 1. NUCLEAR CLEANUP: Destroy ALL children named "Flashlight" or related
-        // uniqueID check to ensure we don't kill ourselves if this script is on the duplicate (unlikely)
-        var allChildren = GetComponentsInChildren<Transform>(true);
-        foreach (var t in allChildren)
-        {
-            if (t != transform && (t.name == "Flashlight" || t.name == "FlashlightModel_TEMP" || t.name.Contains("Sphere")))
-            {
-                Destroy(t.gameObject);
-                Debug.LogWarning($"[FlashlightController] Nuclear cleanup: Destroyed {t.name}");
-            }
-        }
+        currentBattery = maxBattery;
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+            audioSource = gameObject.AddComponent<AudioSource>();
         
-        // Also remove SimpleFlashlightTest component
-        var simpleTest = GetComponent("SimpleFlashlightTest");
-        if (simpleTest != null) Destroy(simpleTest);
-
-        flashlightObject = null; // Reset reference to force recreation
-        flashlightLight = null;
-
-        SetupFlashlight();
-        SetupVolumeProfile();
+        // Işığı otomatik oluştur
+        CreateFlashlight();
         
-        // Start equipped logic
-        if (startEquipped)
-        {
-            isEquipped = true;
-            targetPosition = equippedPosition;
-            if (flashlightObject != null)
-            {
-                // Force position immediately (no animation on start)
-                // Need to convert local offset to world for new logic?
-                // Actually start logic sets localPosition initially, but Update overrides it with world position.
-                // To be safe, we let Update handle position, but set target for it.
-            }
-            if (flashlightLight != null) flashlightLight.enabled = true;
-        }
-        else
-        {
-            isEquipped = false;
-            targetPosition = unequippedPosition;
-        }
+        // Başlangıçta kapalı
+        currentIntensity = 0f;
+        flashlight.intensity = 0f;
+        isOn = false;
     }
     
-    void SetupVolumeProfile()
+    void CreateFlashlight()
     {
-        if (!adjustExposure) return;
-        
-        // Find volume profile for exposure adjustment
-        var volume = FindFirstObjectByType<UnityEngine.Rendering.Volume>();
-        if (volume != null && volume.profile != null)
+        // Işık çıkış noktasını bul veya oluştur
+        if (lightOrigin == null)
         {
-            if (volume.profile.TryGet<UnityEngine.Rendering.Universal.ColorAdjustments>(out colorAdjustments))
+            // Child objelerde ara
+            lightOrigin = transform.Find("LightOrigin");
+            if (lightOrigin == null)
+                lightOrigin = transform.Find("Tip");
+            if (lightOrigin == null)
+                lightOrigin = transform.Find("light");
+            
+            // Hala bulunamadıysa yeni oluştur
+            if (lightOrigin == null)
             {
-                originalExposure = colorAdjustments.postExposure.value;
-                Debug.Log("[Flashlight] Found ColorAdjustments - will adjust exposure");
-            }
-        }
-    }
-
-    void SetupFlashlight()
-    {
-        cameraTransform = transform;
-        
-        // Create flashlight object (Always create fresh after cleanup)
-        if (flashlightObject == null)
-        {
-            flashlightObject = new GameObject("Flashlight");
-            flashlightObject.transform.SetParent(cameraTransform);
-            
-            // Create visual
-            GameObject tempModel = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            tempModel.name = "FlashlightModel_TEMP";
-            tempModel.transform.SetParent(flashlightObject.transform);
-            tempModel.transform.localPosition = Vector3.zero;
-            tempModel.transform.localScale = Vector3.one * 0.15f; // Slightly smaller
-            
-            // Remove collider
-            if (tempModel.GetComponent<Collider>()) Destroy(tempModel.GetComponent<Collider>());
-            
-            // Glow Material
-            var renderer = tempModel.GetComponent<MeshRenderer>();
-            if (renderer)
-            {
-                Material mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-                mat.color = Color.yellow;
-                mat.EnableKeyword("_EMISSION");
-                mat.SetColor("_EmissionColor", Color.yellow * 5f);
-                renderer.material = mat;
+                GameObject originObj = new GameObject("LightOrigin");
+                originObj.transform.SetParent(transform);
+                // Fenerin ucuna yerleştir (varsayılan olarak Z ekseninde ileri)
+                originObj.transform.localPosition = new Vector3(0, 0, 0.2f);
+                originObj.transform.localRotation = Quaternion.identity;
+                lightOrigin = originObj.transform;
             }
         }
         
-        // Light
-        if (flashlightLight == null)
+        // Eğer hali hazırda Light componenti varsa onu kullan, yoksa oluştur
+        flashlight = lightOrigin.GetComponent<Light>();
+        if (flashlight == null)
         {
-            GameObject lightObj = new GameObject("Light");
-            lightObj.transform.SetParent(flashlightObject.transform);
-            lightObj.transform.localPosition = Vector3.zero;
-            lightObj.transform.localRotation = Quaternion.identity;
-            flashlightLight = lightObj.AddComponent<Light>();
+            flashlight = lightOrigin.gameObject.AddComponent<Light>();
         }
         
-        flashlightLight.type = LightType.Spot;
-        flashlightLight.intensity = lightIntensity;
-        flashlightLight.range = lightRange;
-        flashlightLight.spotAngle = spotAngle;
-        flashlightLight.enabled = false;
+        // Spot ışık ayarları
+        flashlight.type = LightType.Spot;
+        flashlight.spotAngle = spotAngle;
+        flashlight.range = spotRange;
+        flashlight.color = lightColor;
+        flashlight.shadows = LightShadows.Soft;
+        flashlight.intensity = 0f;
+        
+        Debug.Log("Fener ışığı otomatik oluşturuldu: " + lightOrigin.name);
     }
-
+    
     void Update()
     {
-        // CONSTANTLY check for camera
-        if (cameraLookTarget == null)
+        // L tuşu ile aç/kapa
+        if (Input.GetKeyDown(toggleKey))
         {
-            if (Camera.main != null) cameraLookTarget = Camera.main.transform;
-            return; // Don't update if no camera
+            ToggleFlashlight();
         }
-    
-        // Toggle input
-        if (Input.GetKeyDown(toggleKey)) ToggleFlashlight();
         
-        if (flashlightObject != null && cameraLookTarget != null)
+        // Batarya yönetimi
+        if (isOn && !hasInfiniteBattery)
         {
-            // --- WORLD SPACE LOCKING ONLY ---
-            // We calculate where the flashlight SHOULD be relative to Camera
-            Vector3 desiredWorldPos = cameraLookTarget.TransformPoint(targetPosition);
-            
-            // We smoothly move the ACTUAL flashlight (parented to Player) to that world point
-            flashlightObject.transform.position = Vector3.Lerp(
-                flashlightObject.transform.position,
-                desiredWorldPos,
-                Time.deltaTime * 20f
-            );
-            
-            // Rotation Tracking
-            if (followCameraRotation)
-            {
-                Quaternion targetRot = cameraLookTarget.rotation * Quaternion.Euler(modelRotationOffset);
-                flashlightObject.transform.rotation = Quaternion.Slerp(
-                    flashlightObject.transform.rotation,
-                    targetRot,
-                    Time.deltaTime * 25f
-                );
-            }
-            
-            if (flashlightLight != null) flashlightLight.transform.rotation = flashlightObject.transform.rotation;
+            DrainBattery();
         }
+        
+        // Yumuşak geçiş animasyonu
+        AnimateLight();
     }
     
     void ToggleFlashlight()
     {
-        isEquipped = !isEquipped;
-        
-        if (isEquipped)
+        if (currentBattery <= 0 && !isOn)
         {
-            EquipFlashlight();
+            PlaySound(flickerSound);
+            StartCoroutine(DeadBatteryFlicker());
+            return;
         }
-        else
+        
+        isOn = !isOn;
+        targetIntensity = isOn ? lightIntensity : 0f;
+        
+        PlaySound(isOn ? toggleOnSound : toggleOffSound);
+        
+        // Titreme efekti
+        if (isOn && currentBattery < maxBattery * 0.2f && flickerCoroutine == null)
         {
-            UnequipFlashlight();
+            flickerCoroutine = StartCoroutine(BatteryFlicker());
+        }
+        else if (!isOn && flickerCoroutine != null)
+        {
+            StopCoroutine(flickerCoroutine);
+            flickerCoroutine = null;
         }
     }
     
-    void EquipFlashlight()
+    void DrainBattery()
     {
-        Debug.Log("[Flashlight] Equipped - Light ON, Moving to hand");
+        currentBattery -= batteryDrainRate * Time.deltaTime;
+        currentBattery = Mathf.Clamp(currentBattery, 0, maxBattery);
         
-        targetPosition = equippedPosition;
-        
-        // Turn on light
-        if (flashlightLight != null)
+        if (currentBattery <= 0)
         {
-            flashlightLight.enabled = true;
-            Debug.Log($"[Flashlight] Light enabled - Intensity: {flashlightLight.intensity}, Range: {flashlightLight.range}");
-        }
-        
-        // Increase exposure for better visibility
-        if (adjustExposure && colorAdjustments != null)
-        {
-            colorAdjustments.postExposure.value = originalExposure + exposureBoost;
-            Debug.Log($"[Flashlight] Exposure boosted to: {colorAdjustments.postExposure.value}");
+            currentBattery = 0;
+            isOn = false;
+            targetIntensity = 0f;
+            PlaySound(flickerSound);
         }
     }
     
-    void UnequipFlashlight()
+    void AnimateLight()
     {
-        Debug.Log("[Flashlight] Unequipped - Light OFF, Moving away");
-        
-        targetPosition = unequippedPosition;
-        
-        // Turn off light
-        if (flashlightLight != null)
+        // Yumuşak intensity geçişi
+        currentIntensity = Mathf.Lerp(currentIntensity, targetIntensity, Time.deltaTime * turnOnSpeed);
+        flashlight.intensity = currentIntensity;
+    }
+    
+    IEnumerator BatteryFlicker()
+    {
+        while (isOn && currentBattery > 0)
         {
-            flashlightLight.enabled = false;
-            Debug.Log("[Flashlight] Light disabled");
-        }
-        
-        // Restore original exposure
-        if (adjustExposure && colorAdjustments != null)
-        {
-            colorAdjustments.postExposure.value = originalExposure;
-            Debug.Log($"[Flashlight] Exposure restored to: {originalExposure}");
+            float flickerProbability = 1f - (currentBattery / maxBattery);
+            
+            if (Random.value < flickerProbability * 0.1f)
+            {
+                float originalIntensity = targetIntensity;
+                targetIntensity = Random.Range(0.1f, originalIntensity);
+                yield return new WaitForSeconds(Random.Range(0.05f, 0.2f));
+                targetIntensity = originalIntensity;
+                
+                if (flickerSound != null && Random.value > 0.7f)
+                    PlaySound(flickerSound);
+            }
+            
+            yield return new WaitForSeconds(Random.Range(0.5f, 2f));
         }
     }
     
-    // Public methods for external control
-    public void ForceEquip()
+    IEnumerator DeadBatteryFlicker()
     {
-        if (!isEquipped)
+        for (int i = 0; i < 3; i++)
         {
-            ToggleFlashlight();
+            flashlight.intensity = lightIntensity * 0.3f;
+            yield return new WaitForSeconds(0.05f);
+            flashlight.intensity = 0f;
+            yield return new WaitForSeconds(0.1f);
         }
-        }
-
-    void OnDrawGizmos()
+    }
+    
+    void PlaySound(AudioClip clip)
     {
-        if (showDebugGizmos && flashlightObject != null)
+        if (clip != null && audioSource != null)
+            audioSource.PlayOneShot(clip);
+    }
+    
+    public void RechargeBattery(float amount)
+    {
+        currentBattery = Mathf.Clamp(currentBattery + amount, 0, maxBattery);
+    }
+    
+    public float GetBatteryPercentage()
+    {
+        return currentBattery / maxBattery;
+    }
+    
+    void OnDrawGizmosSelected()
+    {
+        if (lightOrigin != null)
         {
             Gizmos.color = Color.yellow;
-            Gizmos.DrawWireSphere(flashlightObject.transform.position, 0.2f);
-            Gizmos.DrawLine(transform.position, flashlightObject.transform.position);
+            Gizmos.DrawWireSphere(lightOrigin.position, 0.05f);
+            
+            Gizmos.color = new Color(1, 1, 0, 0.2f);
+            Vector3 direction = lightOrigin.forward * spotRange;
+            Gizmos.DrawRay(lightOrigin.position, direction);
+            
+            // Spot açısını göster
+            float angleRad = spotAngle * Mathf.Deg2Rad;
+            Vector3 right = Quaternion.Euler(0, spotAngle/2, 0) * lightOrigin.forward;
+            Vector3 left = Quaternion.Euler(0, -spotAngle/2, 0) * lightOrigin.forward;
+            
+            Gizmos.DrawLine(lightOrigin.position, lightOrigin.position + right * spotRange * 0.3f);
+            Gizmos.DrawLine(lightOrigin.position, lightOrigin.position + left * spotRange * 0.3f);
         }
-    }
-    
-    public void ForceUnequip()
-    {
-        if (isEquipped)
-        {
-            ToggleFlashlight();
-        }
-    }
-    
-    public bool IsEquipped()
-    {
-        return isEquipped;
-    }
-    
-    // Replace temporary model with your 3D model
-    public void SetFlashlightModel(GameObject modelPrefab)
-    {
-        if (flashlightObject == null) return;
-        
-        // Remove old temp model
-        Transform oldModel = flashlightObject.transform.Find("FlashlightModel_TEMP");
-        if (oldModel != null)
-        {
-            Destroy(oldModel.gameObject);
-        }
-        
-        // Instantiate new model
-        GameObject newModel = Instantiate(modelPrefab, flashlightObject.transform);
-        newModel.name = "FlashlightModel";
-        
-        // Apply offsets for perfect positioning
-        newModel.transform.localPosition = modelPositionOffset;
-        newModel.transform.localRotation = Quaternion.Euler(modelRotationOffset);
-        newModel.transform.localScale = modelScale;
-        
-        Debug.Log($"[Flashlight] Model replaced: {modelPrefab.name}");
-        Debug.Log($"[Flashlight] Applied offsets - Pos: {modelPositionOffset}, Rot: {modelRotationOffset}, Scale: {modelScale}");
     }
 }
