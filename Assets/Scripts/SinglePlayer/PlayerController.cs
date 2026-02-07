@@ -70,6 +70,8 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
+        if (isInputLocked) return;
+
         // Don't process input if cursor is unlocked (menu is open)
         if (Cursor.lockState != CursorLockMode.Locked)
         {
@@ -153,5 +155,16 @@ public class PlayerController : MonoBehaviour
         controller.enabled = false;
         transform.position = position;
         controller.enabled = true;
+    }
+
+    private bool isInputLocked = false;
+    public void SetInputLock(bool locked)
+    {
+        isInputLocked = locked;
+        controller.enabled = !locked; // Optional: disable controller to prevent physics sliding
+        if (locked)
+        {
+            velocity = Vector3.zero; // Stop moving
+        }
     }
 }
