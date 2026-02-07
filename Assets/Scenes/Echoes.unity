@@ -17,7 +17,7 @@ RenderSettings:
   m_Fog: 1
   m_FogColor: {r: 0.01, g: 0.01, b: 0.03, a: 1}
   m_FogMode: 3
-  m_FogDensity: 0.05
+  m_FogDensity: 0.158
   m_LinearFogStart: 0
   m_LinearFogEnd: 300
   m_AmbientSkyColor: {r: 0.02, g: 0.02, b: 0.05, a: 1}
@@ -690,7 +690,7 @@ Light:
   serializedVersion: 12
   m_Type: 1
   m_Color: {r: 0.6, g: 0.7, b: 0.9, a: 1}
-  m_Intensity: 0.2
+  m_Intensity: 0.25
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -2459,6 +2459,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 8616685848737228371, guid: c5efc39a8aaf6e64ea40e9ad573e9b47, type: 3}
+      propertyPath: MoveSpeed
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8616685848737228371, guid: c5efc39a8aaf6e64ea40e9ad573e9b47, type: 3}
+      propertyPath: SprintSpeed
+      value: 3
+      objectReference: {fileID: 0}
     - target: {fileID: 8616685848737228372, guid: c5efc39a8aaf6e64ea40e9ad573e9b47, type: 3}
       propertyPath: m_Name
       value: PlayerCapsule
@@ -4713,6 +4721,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1029024077}
   - component: {fileID: 1029024076}
+  - component: {fileID: 1029024078}
   m_Layer: 0
   m_Name: Global Volume (Night)
   m_TagString: Untagged
@@ -4752,6 +4761,25 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1029024078
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1029024075}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef490bde39d6ad94bbf1bae686c1b40c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Echoes.Horror.SimpleAtmosphereControl
+  exposureOffset: -4.05
+  fogDensity: 0.158
+  fogColor: {r: 0.01, g: 0.01, b: 0.03, a: 1}
+  moonIntensity: 0.25
+  moonColor: {r: 0.6, g: 0.7, b: 0.9, a: 1}
+  globalVolume: {fileID: 1029024076}
+  moonLight: {fileID: 137868148}
 --- !u!1 &1031151750 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 2198760550873186065, guid: 0a9c39d1f19a49a40ab8c7b65f514e50, type: 3}

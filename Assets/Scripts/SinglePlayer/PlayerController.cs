@@ -41,6 +41,12 @@ public class PlayerController : MonoBehaviour
             CreateCamera();
         }
         
+        if (GetComponent<PlayerStamina>() == null)
+        {
+            gameObject.AddComponent<PlayerStamina>();
+            Debug.Log("[PlayerController] Auto-added PlayerStamina component");
+        }
+        
         Debug.Log("[PlayerController] Initialized");
     }
     
@@ -89,7 +95,28 @@ public class PlayerController : MonoBehaviour
         Vector3 move = transform.right * h + transform.forward * v;
         move = move.normalized;
         
-        bool running = Input.GetKey(KeyCode.LeftShift);
+        // Stamina and Sprint Logic
+        bool isMoving = move.sqrMagnitude > 0.1f;
+        bool wantsToRun = Input.GetKey(KeyCode.LeftShift);
+        bool canRun = true;
+        
+        // Check Stamina if exists
+        PlayerStamina stamina = GetComponent<PlayerStamina>();
+        if (stamina != null)
+        {
+            // If we want to run and are moving, try to consume stamina
+            if (wantsToRun && isMoving)
+            {
+                canRun = stamina.ConsumeStamina();
+            }
+            else
+            {
+                // Ensure we respect the hasStamina buffer for starting to run again
+                if (!stamina.HasStamina) canRun = false;
+            }
+        }
+        
+        bool running = wantsToRun && canRun;
         float speed = running ? runSpeed : walkSpeed;
         
         controller.Move(move * speed * Time.deltaTime);
