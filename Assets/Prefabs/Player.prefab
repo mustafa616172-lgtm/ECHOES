@@ -110,6 +110,7 @@ GameObject:
   - component: {fileID: 4156815564036312317}
   - component: {fileID: -6139417832548431988}
   - component: {fileID: 2315728954352138990}
+  - component: {fileID: 5160460236139944844}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -348,6 +349,24 @@ CapsuleCollider:
   m_Height: 2
   m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &5160460236139944844
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2794030326606815162}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5574578f7c729214fb085b86c0021880, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
+  maxHealth: 100
+  currentHealth: 0
+  enableRegeneration: 1
+  regenRate: 5
+  regenDelay: 3
+  showDamageScreen: 1
 --- !u!1 &4904730677870724829
 GameObject:
   m_ObjectHideFlags: 0

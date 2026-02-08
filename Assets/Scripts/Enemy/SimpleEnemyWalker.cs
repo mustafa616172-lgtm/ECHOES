@@ -35,6 +35,16 @@ public class SimpleEnemyWalker : MonoBehaviour
     [SerializeField] private string walkParameterName = "IsWalking";
     [SerializeField] private string runParameterName = "IsRunning";
     [SerializeField] private string speedParameterName = "Speed";
+    [SerializeField] private string attackParameterName = "IsAttacking";
+    [SerializeField] private string roarParameterName = "IsRoaring";
+    
+    [Header("=== ATTACK SETTINGS ===")]
+    [SerializeField] private float attackCooldown = 2f;
+    [SerializeField] private float roarDuration = 1.5f;
+    [SerializeField] private float attackDamage = 25f;
+    private float lastAttackTime = -99f;
+    private bool isRoaring = false;
+    private float roarTimer = 0f;
     
     [Header("=== DEBUG ===")]
     [SerializeField] private bool showDebugGizmos = true;
@@ -73,6 +83,11 @@ public class SimpleEnemyWalker : MonoBehaviour
         navAgent.acceleration = 8f;
         navAgent.stoppingDistance = 0.5f;
         navAgent.autoBraking = true;
+        
+        // IMPORTANT: Prevent character from sinking into ground
+        navAgent.baseOffset = 0f;
+        navAgent.updatePosition = true;
+        navAgent.updateRotation = true;
         
         if (animator == null)
             animator = GetComponent<Animator>();
@@ -237,7 +252,73 @@ public class SimpleEnemyWalker : MonoBehaviour
             }
         }
         
-        // TODO: Add attack logic here
+        // Attack logic
+        if (Time.time - lastAttackTime >= attackCooldown)
+        {
+            // First roar, then attack
+            if (!isRoaring)
+            {
+                StartRoar();
+            }
+        }
+        
+        // Update roar timer
+        if (isRoaring)
+        {
+            roarTimer -= Time.deltaTime;
+            if (roarTimer <= 0)
+            {
+                EndRoarAndAttack();
+            }
+        }
+    }
+    
+    private void StartRoar()
+    {
+        isRoaring = true;
+        roarTimer = roarDuration;
+        
+        if (animator != null && HasParameter(roarParameterName))
+        {
+            animator.SetBool(roarParameterName, true);
+        }
+    }
+    
+    private void EndRoarAndAttack()
+    {
+        isRoaring = false;
+        lastAttackTime = Time.time;
+        
+        if (animator != null)
+        {
+            if (HasParameter(roarParameterName))
+                animator.SetBool(roarParameterName, false);
+            
+            if (HasParameter(attackParameterName))
+                animator.SetTrigger(attackParameterName);
+        }
+        
+        // Deal damage to player if still in range
+        if (targetPlayer != null)
+        {
+            float dist = Vector3.Distance(transform.position, targetPlayer.position);
+            if (dist <= attackRange)
+            {
+                DealDamageToPlayer();
+            }
+        }
+    }
+    
+    private void DealDamageToPlayer()
+    {
+        // Try to find PlayerHealth component
+        var playerHealth = targetPlayer.GetComponent<PlayerHealth>();
+        if (playerHealth != null)
+        {
+            playerHealth.TakeDamage(attackDamage);
+        }
+        
+        Debug.Log("[Mutant] Attack hit player! Damage: " + attackDamage);
     }
     
     private void SetNewPatrolTarget()
@@ -281,6 +362,7 @@ public class SimpleEnemyWalker : MonoBehaviour
         float speed = navAgent.velocity.magnitude;
         bool isWalking = currentState == EnemyState.Patrol && speed > 0.1f;
         bool isRunning = currentState == EnemyState.Chase && speed > 0.1f;
+        bool isAttacking = currentState == EnemyState.Attack && !isRoaring;
         
         if (HasParameter(walkParameterName))
             animator.SetBool(walkParameterName, isWalking);
@@ -290,6 +372,8 @@ public class SimpleEnemyWalker : MonoBehaviour
         
         if (HasParameter(speedParameterName))
             animator.SetFloat(speedParameterName, speed);
+        
+        // Attack state is handled in HandleAttack() for proper sequencing
     }
     
     private bool HasParameter(string paramName)
