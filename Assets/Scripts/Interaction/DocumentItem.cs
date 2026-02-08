@@ -14,13 +14,15 @@ public class DocumentItem : MonoBehaviour, IInteractable
 
     public void Interact()
     {
+        Debug.Log($"[DocumentItem] Interact called on {gameObject.name}");
         if (CinematicManager.Instance != null && cinematicVideo != null)
         {
+            Debug.Log($"[DocumentItem] Playing video: {cinematicVideo.name}");
             CinematicManager.Instance.PlayVideo(cinematicVideo);
         }
         else
         {
-            Debug.LogWarning("Cinematic Manager missing or Video Clip null!");
+            Debug.LogWarning($"[DocumentItem] Cinematic Manager missing ({CinematicManager.Instance != null}) or Video Clip null ({cinematicVideo != null})!");
             if (cinematicVideo == null) Debug.LogError("Please assign a Video Clip to this Document Item!");
         }
     }

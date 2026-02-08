@@ -49,6 +49,7 @@ public class DoorController : MonoBehaviour, IInteractable
 
     public void Interact()
     {
+        Debug.Log($"[DoorController] Interact called on {gameObject.name}");
         if (isLocked)
         {
             TryUnlock();
@@ -87,5 +88,8 @@ public class DoorController : MonoBehaviour, IInteractable
         isOpen = !isOpen;
         float targetAngle = isOpen ? openAngle : closeAngle;
         targetRotation = initialRotation * Quaternion.AngleAxis(targetAngle, rotationAxis);
+        
+        Debug.Log($"[DoorController] Toggling Door. IsOpen: {isOpen}, Target Angle: {targetAngle}, Rotation Axis: {rotationAxis}");
+        Debug.Log($"[DoorController] Current Rot: {transform.localRotation.eulerAngles}, Target Rot: {targetRotation.eulerAngles}");
     }
 }

@@ -11,6 +11,13 @@ public class InteractionController : MonoBehaviour
 
     void Start()
     {
+        // Duplicate Check
+        InteractionController[] controllers = FindObjectsOfType<InteractionController>();
+        if (controllers.Length > 1)
+        {
+            Debug.LogError($"❌ [InteractionController] MULTIPLE INSTANCES DETECTED! Found {controllers.Length} scripts. This will cause double-clicks! Please remove extra scripts from: {gameObject.name}");
+        }
+
         FindPlayerCamera();
 
         // Ensure UI exists
@@ -41,11 +48,11 @@ public class InteractionController : MonoBehaviour
 
         if (playerCamera == null)
         {
-            Debug.LogError("❌ [InteractionController] CAMERA NOT FOUND! I cannot shoot rays without eyes! Please tag your camera as 'MainCamera' or make it a child of this object.");
+            Debug.LogError($"❌ [InteractionController {GetInstanceID()}] CAMERA NOT FOUND! I cannot shoot rays without eyes! Please tag your camera as 'MainCamera' or make it a child of this object.");
         }
         else
         {
-            Debug.Log($"✅ [InteractionController] Camera Found: {playerCamera.name}");
+            Debug.Log($"✅ [InteractionController {GetInstanceID()}] Camera Found: {playerCamera.name}");
         }
     }
 
@@ -54,12 +61,25 @@ public class InteractionController : MonoBehaviour
         // Retry finding camera if missing (e.g. created late)
         if (playerCamera == null)
         {
-            FindPlayerCamera();
-            if (playerCamera == null) return; // Still null, give up this frame
+             FindPlayerCamera();
+             if (playerCamera == null) return; // Still null, give up this frame
         }
 
         HandleRaycast();
         HandleInput();
+    }
+    
+    // ...
+
+    void HandleInput()
+    {
+        if (currentInteractable != null && Input.GetKeyDown(KeyCode.E))
+        {
+            Debug.Log($"[InteractionController {GetInstanceID()}] 'E' Pressed. Interacting with: {currentInteractable}");
+            currentInteractable.Interact();
+            // Refresh prompt immediately in case state changed (e.g. Door Unlocked)
+            InteractionUI.Instance.ShowPrompt(currentInteractable.GetInteractionPrompt());
+        }
     }
 
     void HandleRaycast()
@@ -109,13 +129,5 @@ public class InteractionController : MonoBehaviour
         }
     }
 
-    void HandleInput()
-    {
-        if (currentInteractable != null && Input.GetKeyDown(KeyCode.E))
-        {
-            currentInteractable.Interact();
-            // Refresh prompt immediately in case state changed (e.g. Door Unlocked)
-            InteractionUI.Instance.ShowPrompt(currentInteractable.GetInteractionPrompt());
-        }
-    }
+
 }
