@@ -147,6 +147,44 @@ public class SinglePlayerManager : MonoBehaviour
     
     void CreatePlayer(Vector3 position)
     {
+        // Check if playerPrefab is assigned
+        if (playerPrefab != null)
+        {
+            Debug.Log("[SinglePlayerManager] Spawning assigned player prefab: " + playerPrefab.name);
+            
+            // Instantiate the assigned prefab
+            currentPlayer = Instantiate(playerPrefab, position, Quaternion.identity);
+            currentPlayer.name = "Player";
+            
+            // Make sure it has the necessary components
+            if (currentPlayer.GetComponent<PlayerController>() == null)
+            {
+                Debug.LogWarning("[SinglePlayerManager] Player prefab doesn't have PlayerController! Adding it...");
+                PlayerController controller = currentPlayer.AddComponent<PlayerController>();
+                controller.walkSpeed = 5f;
+                controller.runSpeed = 8f;
+                controller.jumpForce = 7f;
+                controller.mouseSensitivity = 2f;
+            }
+            
+            // Make sure it has pause menu
+            if (currentPlayer.GetComponent<SinglePlayerPauseMenu>() == null)
+            {
+                currentPlayer.AddComponent<SinglePlayerPauseMenu>();
+            }
+            
+            Debug.Log("[SinglePlayerManager] Player prefab spawned successfully!");
+        }
+        else
+        {
+            Debug.LogWarning("[SinglePlayerManager] No player prefab assigned! Creating default player...");
+            CreateDefaultPlayer(position);
+        }
+    }
+    
+    void CreateDefaultPlayer(Vector3 position)
+    {
+        // OLD FALLBACK CODE - Create player programmatically if no prefab assigned
         // Create player root
         currentPlayer = new GameObject("Player");
         currentPlayer.transform.position = position;
@@ -195,7 +233,7 @@ public class SinglePlayerManager : MonoBehaviour
         // Add pause menu for ESC functionality
         currentPlayer.AddComponent<SinglePlayerPauseMenu>();
         
-        Debug.Log("[SinglePlayerManager] Player created at: " + position);
+        Debug.Log("[SinglePlayerManager] Default player created at: " + position);
     }
     
     public void RespawnPlayer()

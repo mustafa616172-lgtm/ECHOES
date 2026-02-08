@@ -41,6 +41,12 @@ public class PlayerController : MonoBehaviour
             CreateCamera();
         }
         
+        if (GetComponent<PlayerStamina>() == null)
+        {
+            gameObject.AddComponent<PlayerStamina>();
+            Debug.Log("[PlayerController] Auto-added PlayerStamina component");
+        }
+        
         Debug.Log("[PlayerController] Initialized");
     }
     
@@ -64,6 +70,8 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
+        if (isInputLocked) return;
+
         // Don't process input if cursor is unlocked (menu is open)
         if (Cursor.lockState != CursorLockMode.Locked)
         {
@@ -89,7 +97,28 @@ public class PlayerController : MonoBehaviour
         Vector3 move = transform.right * h + transform.forward * v;
         move = move.normalized;
         
-        bool running = Input.GetKey(KeyCode.LeftShift);
+        // Stamina and Sprint Logic
+        bool isMoving = move.sqrMagnitude > 0.1f;
+        bool wantsToRun = Input.GetKey(KeyCode.LeftShift);
+        bool canRun = true;
+        
+        // Check Stamina if exists
+        PlayerStamina stamina = GetComponent<PlayerStamina>();
+        if (stamina != null)
+        {
+            // If we want to run and are moving, try to consume stamina
+            if (wantsToRun && isMoving)
+            {
+                canRun = stamina.ConsumeStamina();
+            }
+            else
+            {
+                // Ensure we respect the hasStamina buffer for starting to run again
+                if (!stamina.HasStamina) canRun = false;
+            }
+        }
+        
+        bool running = wantsToRun && canRun;
         float speed = running ? runSpeed : walkSpeed;
         
         controller.Move(move * speed * Time.deltaTime);
@@ -126,5 +155,16 @@ public class PlayerController : MonoBehaviour
         controller.enabled = false;
         transform.position = position;
         controller.enabled = true;
+    }
+
+    private bool isInputLocked = false;
+    public void SetInputLock(bool locked)
+    {
+        isInputLocked = locked;
+        controller.enabled = !locked; // Optional: disable controller to prevent physics sliding
+        if (locked)
+        {
+            velocity = Vector3.zero; // Stop moving
+        }
     }
 }
