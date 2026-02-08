@@ -5,6 +5,7 @@ public class DocumentItem : MonoBehaviour, IInteractable
 {
     [Header("Document Settings")]
     public string documentName = "Secret File";
+    public Texture documentImage; // The image to show before video
     public VideoClip cinematicVideo;
 
     public string GetInteractionPrompt()
@@ -15,15 +16,15 @@ public class DocumentItem : MonoBehaviour, IInteractable
     public void Interact()
     {
         Debug.Log($"[DocumentItem] Interact called on {gameObject.name}");
-        if (CinematicManager.Instance != null && cinematicVideo != null)
+        
+        if (CinematicManager.Instance != null)
         {
-            Debug.Log($"[DocumentItem] Playing video: {cinematicVideo.name}");
-            CinematicManager.Instance.PlayVideo(cinematicVideo);
+            // Now passing both image and video to the manager
+            CinematicManager.Instance.StartCinematicSequence(documentImage, cinematicVideo);
         }
         else
         {
-            Debug.LogWarning($"[DocumentItem] Cinematic Manager missing ({CinematicManager.Instance != null}) or Video Clip null ({cinematicVideo != null})!");
-            if (cinematicVideo == null) Debug.LogError("Please assign a Video Clip to this Document Item!");
+            Debug.LogError($"[DocumentItem] Cinematic Manager missing! Cannot play sequence.");
         }
     }
 }
