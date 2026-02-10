@@ -111,6 +111,9 @@ GameObject:
   - component: {fileID: -6139417832548431988}
   - component: {fileID: 2315728954352138990}
   - component: {fileID: 5160460236139944844}
+  - component: {fileID: -4976384627710744434}
+  - component: {fileID: 5692978142267231109}
+  - component: {fileID: 4947577001702080988}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -287,7 +290,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2794030326606815162}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f9bcb34bf7cb294aac25be9712596a6, type: 3}
   m_Name: 
@@ -367,6 +370,72 @@ MonoBehaviour:
   regenRate: 5
   regenDelay: 3
   showDamageScreen: 1
+  createHealthUI: 1
+--- !u!114 &-4976384627710744434
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2794030326606815162}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e0042f39c993a274ebf9cb0628fe2c99, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NoiseMaker
+  noiseType: 0
+  customRadius: 0
+  minImpactVelocity: 2
+  noiseCooldown: 0.5
+  impactSound: {fileID: 0}
+  volume: 1
+--- !u!114 &5692978142267231109
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2794030326606815162}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bd56028a72a7aa64bb4bb5d1c427d42a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThrowableObject
+  pickupRange: 3
+  holdDistance: 1.5
+  holdHeight: 0
+  throwForce: 15
+  dropForce: 2
+  showOutlineWhenLooking: 1
+  outlineColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+--- !u!114 &4947577001702080988
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2794030326606815162}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d70e52e993af1084fb2d6c3fa6379c17, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerController
+  walkSpeed: 5
+  runSpeed: 8
+  jumpForce: 7
+  gravity: -20
+  mouseSensitivity: 2
+  maxLookAngle: 85
+  runNoiseRadius: 10
+  noiseInterval: 0.5
+  footstepSound: {fileID: 8300000, guid: 72f526a6a9890f643a88e85a61c86c8a, type: 3}
+  crouchSpeed: 2.5
+  crouchHeight: 1
+  standHeight: 2
+  crouchTransitionSpeed: 8
+  maxBreathHoldTime: 5
+  breathRecoveryRate: 2
+  breathSound: {fileID: 8300000, guid: 96e622b5986730a42977a631c20ed656, type: 3}
 --- !u!1 &4904730677870724829
 GameObject:
   m_ObjectHideFlags: 0

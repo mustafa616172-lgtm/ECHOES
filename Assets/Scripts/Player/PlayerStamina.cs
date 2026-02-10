@@ -90,14 +90,27 @@ public class PlayerStamina : MonoBehaviour
     {
         // Check if we already have one
         if (staminaSlider != null) return;
+        
+        // Clean up any duplicate StaminaSlider
+        GameObject existingSlider = GameObject.Find("StaminaSlider");
+        if (existingSlider != null) Destroy(existingSlider);
 
-        // 1. Create Canvas
-        GameObject canvasObj = new GameObject("StaminaCanvas");
-        Canvas canvas = canvasObj.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvasObj.AddComponent<CanvasScaler>();
-        canvasObj.AddComponent<GraphicRaycaster>();
-        canvasGroup = canvasObj.AddComponent<CanvasGroup>();
+        // 1. Find or create shared HUD Canvas
+        GameObject canvasObj = GameObject.Find("PlayerHUDCanvas");
+        if (canvasObj == null)
+        {
+            canvasObj = new GameObject("PlayerHUDCanvas");
+            Canvas canvas = canvasObj.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 10;
+            CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920, 1080);
+            canvasObj.AddComponent<GraphicRaycaster>();
+        }
+        canvasGroup = canvasObj.GetComponent<CanvasGroup>();
+        if (canvasGroup == null)
+            canvasGroup = canvasObj.AddComponent<CanvasGroup>();
 
         // 2. Create Slider Background
         GameObject sliderObj = new GameObject("StaminaSlider");

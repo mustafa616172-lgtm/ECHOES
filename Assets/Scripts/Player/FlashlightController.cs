@@ -3,27 +3,27 @@ using System.Collections;
 
 public class FlashlightController : MonoBehaviour
 {
-    [Header("IÅŸÄ±k AyarlarÄ±")]
-    public Transform lightOrigin;   // IÅŸÄ±ÄŸÄ±n Ã§Ä±kacaÄŸÄ± nokta (modelin ucu)
-    private Light flashlight;       // Otomatik oluÅŸturulacak tek Ä±ÅŸÄ±k
+    [Header("Iþýk Ayarlarý")]
+    public Transform lightOrigin;   // Iþýðýn çýkacaðý nokta (modelin ucu)
+    private Light flashlight;       // Otomatik oluþturulacak tek ýþýk
     
-    [Header("TuÅŸ AyarlarÄ±")]
+    [Header("Tuþ Ayarlarý")]
     public KeyCode toggleKey = KeyCode.L;
     
-    [Header("Batarya AyarlarÄ±")]
+    [Header("Batarya Ayarlarý")]
     public float maxBattery = 100f;
     public float batteryDrainRate = 2f;
     public float currentBattery;
     public bool hasInfiniteBattery = false;
     
-    [Header("Animasyon AyarlarÄ±")]
+    [Header("Animasyon Ayarlarý")]
     public float turnOnSpeed = 8f;
     public float flickerChance = 0.3f;
     public AudioClip toggleOnSound;
     public AudioClip toggleOffSound;
     public AudioClip flickerSound;
     
-    [Header("The Forest TarzÄ± Ayarlar")]
+    [Header("The Forest Tarzý Ayarlar")]
     public float spotAngle = 70f;
     public float spotRange = 20f;
     public float lightIntensity = 2f;
@@ -42,10 +42,10 @@ public class FlashlightController : MonoBehaviour
         if (audioSource == null)
             audioSource = gameObject.AddComponent<AudioSource>();
         
-        // IÅŸÄ±ÄŸÄ± otomatik oluÅŸtur
+        // Iþýðý otomatik oluþtur
         CreateFlashlight();
         
-        // BaÅŸlangÄ±Ã§ta kapalÄ±
+        // Baþlangýçta kapalý
         currentIntensity = 0f;
         flashlight.intensity = 0f;
         isOn = false;
@@ -53,7 +53,7 @@ public class FlashlightController : MonoBehaviour
     
     void CreateFlashlight()
     {
-        // IÅŸÄ±k Ã§Ä±kÄ±ÅŸ noktasÄ±nÄ± bul veya oluÅŸtur
+        // Iþýk çýkýþ noktasýný bul veya oluþtur
         if (lightOrigin == null)
         {
             // Child objelerde ara
@@ -63,26 +63,26 @@ public class FlashlightController : MonoBehaviour
             if (lightOrigin == null)
                 lightOrigin = transform.Find("light");
             
-            // Hala bulunamadÄ±ysa yeni oluÅŸtur
+            // Hala bulunamadýysa yeni oluþtur
             if (lightOrigin == null)
             {
                 GameObject originObj = new GameObject("LightOrigin");
                 originObj.transform.SetParent(transform);
-                // Fenerin ucuna yerleÅŸtir (varsayÄ±lan olarak Z ekseninde ileri)
+                // Fenerin ucuna yerleþtir (varsayýlan olarak Z ekseninde ileri)
                 originObj.transform.localPosition = new Vector3(0, 0, 0.2f);
                 originObj.transform.localRotation = Quaternion.identity;
                 lightOrigin = originObj.transform;
             }
         }
         
-        // EÄŸer hali hazÄ±rda Light componenti varsa onu kullan, yoksa oluÅŸtur
+        // Eðer hali hazýrda Light componenti varsa onu kullan, yoksa oluþtur
         flashlight = lightOrigin.GetComponent<Light>();
         if (flashlight == null)
         {
             flashlight = lightOrigin.gameObject.AddComponent<Light>();
         }
         
-        // Spot Ä±ÅŸÄ±k ayarlarÄ±
+        // Spot ýþýk ayarlarý
         flashlight.type = LightType.Spot;
         flashlight.spotAngle = spotAngle;
         flashlight.range = spotRange;
@@ -90,24 +90,24 @@ public class FlashlightController : MonoBehaviour
         flashlight.shadows = LightShadows.Soft;
         flashlight.intensity = 0f;
         
-        Debug.Log("Fener Ä±ÅŸÄ±ÄŸÄ± otomatik oluÅŸturuldu: " + lightOrigin.name);
+        Debug.Log("Fener ýþýðý otomatik oluþturuldu: " + lightOrigin.name);
     }
     
     void Update()
     {
-        // L tuÅŸu ile aÃ§/kapa
+        // L tuþu ile aç/kapa
         if (Input.GetKeyDown(toggleKey))
         {
             ToggleFlashlight();
         }
         
-        // Batarya yÃ¶netimi
+        // Batarya yönetimi
         if (isOn && !hasInfiniteBattery)
         {
             DrainBattery();
         }
         
-        // YumuÅŸak geÃ§iÅŸ animasyonu
+        // Yumuþak geçiþ animasyonu
         AnimateLight();
     }
     
@@ -153,7 +153,7 @@ public class FlashlightController : MonoBehaviour
     
     void AnimateLight()
     {
-        // YumuÅŸak intensity geÃ§iÅŸi
+        // Yumuþak intensity geçiþi
         currentIntensity = Mathf.Lerp(currentIntensity, targetIntensity, Time.deltaTime * turnOnSpeed);
         flashlight.intensity = currentIntensity;
     }
@@ -217,7 +217,7 @@ public class FlashlightController : MonoBehaviour
             Vector3 direction = lightOrigin.forward * spotRange;
             Gizmos.DrawRay(lightOrigin.position, direction);
             
-            // Spot aÃ§Ä±sÄ±nÄ± gÃ¶ster
+            // Spot açýsýný göster
             float angleRad = spotAngle * Mathf.Deg2Rad;
             Vector3 right = Quaternion.Euler(0, spotAngle/2, 0) * lightOrigin.forward;
             Vector3 left = Quaternion.Euler(0, -spotAngle/2, 0) * lightOrigin.forward;

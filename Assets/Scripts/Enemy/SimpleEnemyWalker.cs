@@ -49,8 +49,33 @@ public class SimpleEnemyWalker : MonoBehaviour
     [Header("=== DEBUG ===")]
     [SerializeField] private bool showDebugGizmos = true;
     
+    [Header("=== SOUND DETECTION ===")]
+    [SerializeField] private bool enableSoundDetection = true;
+    [SerializeField] private float soundCheckInterval = 0.2f;
+    [SerializeField] private float investigateSpeed = 2.5f;
+    [SerializeField] private float investigateDuration = 5f; // Time spent looking around at sound location
+    [SerializeField] private float soundPriorityOverPlayer = 0.7f; // 0-1, higher = sounds more important
+    
+    private float lastSoundCheckTime;
+    private Vector3 investigateTarget;
+    private float investigateTimer;
+    private SoundManager.SoundEvent currentSoundTarget;
+    
+    [Header("=== AWARENESS SYSTEM ===")]
+    [SerializeField] private float awarenessDecayRate = 10f; // How fast awareness drops
+    [SerializeField] private float soundAwarenessGain = 25f; // Awareness gained from sounds
+    [SerializeField] private float sightAwarenessGain = 50f; // Awareness gained from seeing player
+    [SerializeField] private float suspiciousThreshold = 30f; // Awareness level to become suspicious
+    [SerializeField] private float alertThreshold = 70f; // Awareness level to become alert
+    [SerializeField] private float hostileThreshold = 100f; // Awareness level to become hostile
+    
+    // Awareness state
+    public enum AwarenessLevel { Unaware, Suspicious, Alert, Hostile }
+    [SerializeField] private float currentAwareness = 0f;
+    private AwarenessLevel awarenessLevel = AwarenessLevel.Unaware;
+    
     // State
-    public enum EnemyState { Idle, Patrol, Chase, Attack }
+    public enum EnemyState { Idle, Patrol, Chase, Attack, Investigating }
     [SerializeField] private EnemyState currentState = EnemyState.Patrol;
     
     // Private variables
@@ -63,6 +88,8 @@ public class SimpleEnemyWalker : MonoBehaviour
     
     public EnemyState CurrentState => currentState;
     public Transform TargetPlayer => targetPlayer;
+    public float Awareness => currentAwareness;
+    public AwarenessLevel CurrentAwarenessLevel => awarenessLevel;
     
     private void Awake()
     {
@@ -110,6 +137,9 @@ public class SimpleEnemyWalker : MonoBehaviour
             FindPlayer();
         }
         
+        // Update awareness level
+        UpdateAwareness();
+        
         // Update state based on player distance
         UpdateState();
         
@@ -127,6 +157,9 @@ public class SimpleEnemyWalker : MonoBehaviour
                 break;
             case EnemyState.Attack:
                 HandleAttack();
+                break;
+            case EnemyState.Investigating:
+                HandleInvestigating();
                 break;
         }
         
@@ -151,8 +184,18 @@ public class SimpleEnemyWalker : MonoBehaviour
     
     private void UpdateState()
     {
+        // Check for sounds periodically
+        if (enableSoundDetection && Time.time - lastSoundCheckTime > soundCheckInterval)
+        {
+            lastSoundCheckTime = Time.time;
+            CheckForSounds();
+        }
+        
         if (targetPlayer == null)
         {
+            // If investigating a sound, continue
+            if (currentState == EnemyState.Investigating) return;
+            
             if (enablePatrol && currentState != EnemyState.Patrol && currentState != EnemyState.Idle)
             {
                 currentState = EnemyState.Patrol;
@@ -164,6 +207,22 @@ public class SimpleEnemyWalker : MonoBehaviour
         float distanceToPlayer = Vector3.Distance(transform.position, targetPlayer.position);
         
         EnemyState previousState = currentState;
+        
+        // If we're investigating, check if we should switch to chase
+        if (currentState == EnemyState.Investigating)
+        {
+            // Player in detection range takes priority
+            if (distanceToPlayer <= detectionRange)
+            {
+                currentState = EnemyState.Chase;
+                currentSoundTarget = null;
+            }
+            else
+            {
+                // Continue investigating
+                return;
+            }
+        }
         
         // State transitions based on distance
         if (distanceToPlayer <= attackRange)
@@ -194,12 +253,138 @@ public class SimpleEnemyWalker : MonoBehaviour
                 case EnemyState.Chase:
                     navAgent.speed = chaseSpeed;
                     break;
+                case EnemyState.Investigating:
+                    navAgent.speed = investigateSpeed;
+                    break;
                 case EnemyState.Attack:
                 case EnemyState.Idle:
                     navAgent.speed = 0;
                     break;
             }
         }
+    }
+    
+    private void CheckForSounds()
+    {
+        if (SoundManager.Instance == null) return;
+        
+        // Don't check if already chasing or attacking player
+        if (currentState == EnemyState.Chase || currentState == EnemyState.Attack) return;
+        
+        var sound = SoundManager.Instance.GetMostRelevantSound(transform.position);
+        
+        if (sound != null)
+        {
+            // If player is nearby but sound is also nearby, compare priorities
+            if (targetPlayer != null)
+            {
+                float distanceToPlayer = Vector3.Distance(transform.position, targetPlayer.position);
+                float distanceToSound = Vector3.Distance(transform.position, sound.position);
+                
+                // If player is in detection range, ignore sounds (chase player)
+                if (distanceToPlayer <= detectionRange) return;
+            }
+            
+            // Investigate the sound!
+            StartInvestigating(sound);
+        }
+    }
+    
+    private void StartInvestigating(SoundManager.SoundEvent sound)
+    {
+        currentState = EnemyState.Investigating;
+        currentSoundTarget = sound;
+        investigateTarget = sound.position;
+        investigateTimer = investigateDuration;
+        navAgent.speed = investigateSpeed;
+        navAgent.SetDestination(investigateTarget);
+        
+        // Gain awareness from hearing sound
+        GainAwareness(soundAwarenessGain);
+        
+        Debug.Log($"[Mutant] Heard sound! Investigating at {investigateTarget}");
+    }
+    
+    private void HandleInvestigating()
+    {
+        navAgent.isStopped = false;
+        
+        // Check if we've reached the sound location
+        if (!navAgent.pathPending && navAgent.remainingDistance <= navAgent.stoppingDistance + 0.5f)
+        {
+            // Look around
+            investigateTimer -= Time.deltaTime;
+            
+            // Slowly rotate to look around
+            transform.Rotate(0, 30f * Time.deltaTime, 0);
+            
+            if (investigateTimer <= 0)
+            {
+                // Done investigating, go back to patrol
+                currentState = enablePatrol ? EnemyState.Patrol : EnemyState.Idle;
+                currentSoundTarget = null;
+                navAgent.speed = patrolSpeed;
+                
+                Debug.Log("[Mutant] Finished investigating, returning to patrol");
+            }
+        }
+    }
+    
+    private void UpdateAwareness()
+    {
+        if (targetPlayer == null) return;
+        
+        float distanceToPlayer = Vector3.Distance(transform.position, targetPlayer.position);
+        
+        // Check if player is using stealth
+        PlayerController playerController = targetPlayer.GetComponent<PlayerController>();
+        bool playerIsSilent = playerController != null && playerController.IsSilent;
+        
+        // If player is in detection range and NOT silent, gain awareness
+        if (distanceToPlayer <= detectionRange && !playerIsSilent)
+        {
+            // Can we see the player? (simple LOS check)
+            Vector3 dirToPlayer = (targetPlayer.position - transform.position).normalized;
+            float angle = Vector3.Angle(transform.forward, dirToPlayer);
+            
+            if (angle < 90f) // Within forward cone
+            {
+                RaycastHit hit;
+                if (Physics.Raycast(transform.position + Vector3.up, dirToPlayer, out hit, detectionRange))
+                {
+                    if (hit.transform == targetPlayer)
+                    {
+                        // We see the player!
+                        currentAwareness += sightAwarenessGain * Time.deltaTime;
+                    }
+                }
+            }
+        }
+        
+        // Decay awareness over time if not hostile
+        if (awarenessLevel != AwarenessLevel.Hostile)
+        {
+            currentAwareness -= awarenessDecayRate * Time.deltaTime;
+        }
+        
+        // Clamp and update level
+        currentAwareness = Mathf.Clamp(currentAwareness, 0f, 100f);
+        
+        // Update awareness level
+        if (currentAwareness >= hostileThreshold)
+            awarenessLevel = AwarenessLevel.Hostile;
+        else if (currentAwareness >= alertThreshold)
+            awarenessLevel = AwarenessLevel.Alert;
+        else if (currentAwareness >= suspiciousThreshold)
+            awarenessLevel = AwarenessLevel.Suspicious;
+        else
+            awarenessLevel = AwarenessLevel.Unaware;
+    }
+    
+    public void GainAwareness(float amount)
+    {
+        currentAwareness += amount;
+        currentAwareness = Mathf.Min(currentAwareness, 100f);
     }
     
     private void HandleIdle()
