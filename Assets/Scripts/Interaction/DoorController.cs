@@ -37,7 +37,7 @@ public class DoorController : MonoBehaviour, IInteractable
     {
         if (Quaternion.Angle(transform.localRotation, targetRotation) > 0.1f)
         {
-            transform.localRotation = Quaternion.Slerp(transform.localRotation, targetRotation, Time.deltaTime * smoothSpeed);
+            transform.localRotation = Quaternion.Slerp(transform.localRotation, targetRotation, Time.unscaledDeltaTime * smoothSpeed);
         }
     }
 

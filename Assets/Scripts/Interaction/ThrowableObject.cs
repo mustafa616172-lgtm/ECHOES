@@ -67,6 +67,10 @@ public class ThrowableObject : MonoBehaviour
     {
         if (playerCamera == null) return;
         
+        // Block pickup/throw when any UI menu is open (cursor unlocked)
+        // Exception: if already holding, allow drop so object isn't stuck
+        if (Cursor.lockState != CursorLockMode.Locked && !isHeld) return;
+        
         if (isHeld)
         {
             UpdateHeldPosition();

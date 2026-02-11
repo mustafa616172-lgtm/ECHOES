@@ -60,7 +60,7 @@ public class PlayerHealth : MonoBehaviour
         // Health regeneration
         if (enableRegeneration && currentHealth < maxHealth)
         {
-            if (Time.time - lastDamageTime >= regenDelay)
+            if (Time.unscaledTime - lastDamageTime >= regenDelay)
             {
                 currentHealth += regenRate * Time.deltaTime;
                 currentHealth = Mathf.Min(currentHealth, maxHealth);
@@ -75,7 +75,7 @@ public class PlayerHealth : MonoBehaviour
         if (isDead) return;
         
         currentHealth -= damage;
-        lastDamageTime = Time.time;
+        lastDamageTime = Time.unscaledTime;
         
         Debug.Log("[PlayerHealth] Took damage: " + damage + ", Current health: " + currentHealth);
         

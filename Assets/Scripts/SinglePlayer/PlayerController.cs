@@ -25,6 +25,7 @@ public class PlayerController : MonoBehaviour
     private Vector3 velocity;
     private float pitch = 0f;
     private bool isGrounded;
+    private PlayerStamina staminaComponent;
     
     [Header("Sound")]
     [SerializeField] private float runNoiseRadius = 10f;
@@ -73,6 +74,7 @@ public class PlayerController : MonoBehaviour
             gameObject.AddComponent<PlayerStamina>();
             Debug.Log("[PlayerController] Auto-added PlayerStamina component");
         }
+        staminaComponent = GetComponent<PlayerStamina>();
         
         // Auto-add PlayerHealth if not present
         if (GetComponent<PlayerHealth>() == null)
@@ -143,6 +145,14 @@ public class PlayerController : MonoBehaviour
             Debug.Log("[PlayerController] Auto-added AmbientSoundSystem");
         }
         
+        // Auto-add MapSystem
+        if (FindObjectOfType<MapSystem>() == null)
+        {
+            GameObject mapObj = new GameObject("_MapSystem");
+            mapObj.AddComponent<MapSystem>();
+            Debug.Log("[PlayerController] Auto-added MapSystem");
+        }
+        
         Debug.Log("[PlayerController] Initialized");
     }
     
@@ -204,7 +214,7 @@ public class PlayerController : MonoBehaviour
         if (isCrouching) canRun = false;
         
         // Check Stamina if exists
-        PlayerStamina stamina = GetComponent<PlayerStamina>();
+        PlayerStamina stamina = staminaComponent;
         if (stamina != null)
         {
             // If we want to run and are moving, try to consume stamina
@@ -278,7 +288,8 @@ public class PlayerController : MonoBehaviour
     void HandleBreathHold()
     {
         // Space to hold breath (only when not jumping)
-        if (Input.GetKey(KeyCode.Space) && isGrounded && currentBreath > 0)
+        // V key for breath-hold (Space is reserved for Jump)
+        if (Input.GetKey(KeyCode.V) && isGrounded && currentBreath > 0)
         {
             isHoldingBreath = true;
             currentBreath -= Time.deltaTime;

@@ -522,8 +522,9 @@ public class SimpleEnemyWalker : MonoBehaviour
             }
             else
             {
-                // Try again with a different random point
-                SetNewPatrolTarget();
+                // Fallback to start position instead of recursion (prevents StackOverflow)
+                currentPatrolTarget = startPosition;
+                navAgent.SetDestination(currentPatrolTarget);
             }
         }
         else

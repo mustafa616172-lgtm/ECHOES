@@ -31,7 +31,7 @@ public class PlayerStamina : MonoBehaviour
     void Update()
     {
         // Regen Logic
-        if (Time.time - lastDrainTime > regenDelay && currentStamina < maxStamina)
+        if (Time.unscaledTime - lastDrainTime > regenDelay && currentStamina < maxStamina)
         {
             currentStamina += regenRate * Time.deltaTime;
             currentStamina = Mathf.Min(currentStamina, maxStamina);
@@ -54,7 +54,7 @@ public class PlayerStamina : MonoBehaviour
         if (currentStamina > 0)
         {
             currentStamina -= drainRate * amountMultiplier * Time.deltaTime;
-            lastDrainTime = Time.time;
+            lastDrainTime = Time.unscaledTime;
             UpdateUI();
             
             if (currentStamina <= 0)

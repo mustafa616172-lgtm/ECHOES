@@ -96,6 +96,10 @@ public class InventorySystem : MonoBehaviour
     private Text noteContentText;
     private bool isReadingNote = false;
     
+    // Cached references to avoid FindObjectOfType every frame/use
+    private FlashlightController cachedFlashlight;
+    private PlayerHealth cachedPlayerHealth;
+    
     // Journal / Lore System
     private struct JournalEntry
     {
@@ -142,6 +146,11 @@ public class InventorySystem : MonoBehaviour
         CreateBatteryIndicator();
         CreateJournalPanel();
         CreateJournalCounterHUD();
+        
+        // Cache references
+        cachedFlashlight = FindObjectOfType<FlashlightController>();
+        cachedPlayerHealth = FindObjectOfType<PlayerHealth>();
+        
         Debug.Log("[Inventory] System v2 initialized - Hotbar, Grid UI, Journal, Battery HUD");
     }
     
@@ -359,7 +368,9 @@ public class InventorySystem : MonoBehaviour
     
     bool UseBattery()
     {
-        FlashlightController flashlight = FindObjectOfType<FlashlightController>();
+        // Use cached reference instead of FindObjectOfType
+        FlashlightController flashlight = cachedFlashlight;
+        if (flashlight == null) flashlight = cachedFlashlight = FindObjectOfType<FlashlightController>();
         if (flashlight == null)
         {
             ShowUseFeedback("Fener bulunamadi!", new Color(1f, 0.3f, 0.3f));
@@ -380,7 +391,9 @@ public class InventorySystem : MonoBehaviour
     
     bool UseHealthKit()
     {
-        PlayerHealth health = FindObjectOfType<PlayerHealth>();
+        // Use cached reference instead of FindObjectOfType
+        PlayerHealth health = cachedPlayerHealth;
+        if (health == null) health = cachedPlayerHealth = FindObjectOfType<PlayerHealth>();
         if (health == null)
         {
             ShowUseFeedback("Saglik sistemi bulunamadi!", new Color(1f, 0.3f, 0.3f));
@@ -780,16 +793,12 @@ public class InventorySystem : MonoBehaviour
         gridPanel.SetActive(true);
         if (tooltipPanel != null) tooltipPanel.SetActive(false);
         
-        // Slow-motion effect
-        savedTimeScale = Time.timeScale;
-        Time.timeScale = 0.15f;
-        
         // Show cursor
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
         
         RefreshGrid();
-        Debug.Log("[Inventory] Grid opened - slow-motion active");
+        Debug.Log("[Inventory] Grid opened");
     }
     
     void CloseInventory()
@@ -799,14 +808,11 @@ public class InventorySystem : MonoBehaviour
         if (tooltipPanel != null) tooltipPanel.SetActive(false);
         hoveredCell = -1;
         
-        // Restore time
-        Time.timeScale = savedTimeScale > 0 ? savedTimeScale : 1f;
-        
         // Hide cursor
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
         
-        Debug.Log("[Inventory] Grid closed - time restored");
+        Debug.Log("[Inventory] Grid closed");
     }
     
     void RefreshGrid()
@@ -1366,7 +1372,9 @@ public class InventorySystem : MonoBehaviour
     {
         if (batteryIndicatorText == null) return;
         
-        FlashlightController flashlight = FindObjectOfType<FlashlightController>();
+        // Use cached reference instead of FindObjectOfType every frame
+        FlashlightController flashlight = cachedFlashlight;
+        if (flashlight == null) flashlight = cachedFlashlight = FindObjectOfType<FlashlightController>();
         if (flashlight == null)
         {
             batteryIndicatorText.text = "";

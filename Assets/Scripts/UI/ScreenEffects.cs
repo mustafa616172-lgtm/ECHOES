@@ -5,7 +5,6 @@ using UnityEngine.UI;
 /// Horror screen effects for ECHOES.
 /// - Damage flash (red vignette when hit)
 /// - Low health pulse (persistent red edges)
-/// - Enemy proximity glitch (static/distortion when enemy is near)
 /// - Screen shake (on attack)
 /// Auto-instantiates on player.
 /// </summary>
@@ -21,11 +20,6 @@ public class ScreenEffects : MonoBehaviour
     [SerializeField] private float lowHealthPulseSpeed = 2f;
     [SerializeField] private float criticalPulseSpeed = 5f;
     
-    [Header("Enemy Proximity Glitch")]
-    [SerializeField] private float glitchStartDistance = 12f;
-    [SerializeField] private float glitchMaxDistance = 5f;
-    [SerializeField] private float glitchIntensity = 0.8f;
-    
     [Header("Screen Shake")]
     [SerializeField] private float shakeIntensity = 0.15f;
     [SerializeField] private float shakeDuration = 0.3f;
@@ -34,8 +28,6 @@ public class ScreenEffects : MonoBehaviour
     private GameObject effectCanvas;
     private Image damageOverlay;      // Full screen red flash
     private Image vignetteOverlay;    // Persistent vignette edges
-    private Image glitchOverlay;      // Static/noise overlay
-    private Image scanlineOverlay;    // Scanline effect
     
     // State
     private float damageFlashTimer = 0f;
@@ -46,11 +38,9 @@ public class ScreenEffects : MonoBehaviour
     
     // References
     private PlayerHealth playerHealth;
-    private SimpleEnemyWalker trackedEnemy;
     
     // Textures
     private Texture2D vignetteTexture;
-    private Texture2D noiseTexture;
     
     public static ScreenEffects Instance { get; private set; }
     
@@ -64,15 +54,13 @@ public class ScreenEffects : MonoBehaviour
         CreateEffectTextures();
         CreateEffectUI();
         FindReferences();
-        Debug.Log("[ScreenEffects] Initialized with damage flash, low health pulse, glitch, and shake");
+        Debug.Log("[ScreenEffects] Initialized with damage flash, low health pulse, and shake");
     }
     
     void FindReferences()
     {
         if (playerHealth == null)
             playerHealth = GetComponent<PlayerHealth>();
-        if (trackedEnemy == null)
-            trackedEnemy = FindObjectOfType<SimpleEnemyWalker>();
         if (cameraTransform == null)
         {
             Camera cam = GetComponentInChildren<Camera>();
@@ -89,7 +77,6 @@ public class ScreenEffects : MonoBehaviour
         FindReferences();
         UpdateDamageFlash();
         UpdateLowHealthVignette();
-        UpdateProximityGlitch();
         UpdateScreenShake();
     }
     
@@ -160,67 +147,6 @@ public class ScreenEffects : MonoBehaviour
     }
     
     // ============================================
-    // ENEMY PROXIMITY GLITCH - Static noise
-    // ============================================
-    
-    void UpdateProximityGlitch()
-    {
-        if (glitchOverlay == null || scanlineOverlay == null) return;
-        
-        if (trackedEnemy == null)
-        {
-            trackedEnemy = FindObjectOfType<SimpleEnemyWalker>();
-            if (trackedEnemy == null)
-            {
-                glitchOverlay.color = Color.clear;
-                scanlineOverlay.color = Color.clear;
-                return;
-            }
-        }
-        
-        Transform player = transform;
-        float distance = Vector3.Distance(player.position, trackedEnemy.transform.position);
-        
-        if (distance < glitchStartDistance)
-        {
-            float t = 1f - Mathf.Clamp01((distance - glitchMaxDistance) / (glitchStartDistance - glitchMaxDistance));
-            float intensity = t * glitchIntensity;
-            
-            // Glitch noise - flickering with random bursts
-            float flicker = Random.Range(0f, 1f) < 0.1f ? Random.Range(0.5f, 1f) : 0f;
-            float noiseAlpha = intensity * (0.05f + flicker * 0.3f);
-            glitchOverlay.color = new Color(1f, 1f, 1f, noiseAlpha);
-            
-            // Animate noise UV offset for movement effect
-            if (noiseTexture != null && Random.Range(0f, 1f) < 0.3f)
-            {
-                glitchOverlay.material.mainTextureOffset = new Vector2(
-                    Random.Range(0f, 1f), Random.Range(0f, 1f));
-            }
-            
-            // Scanlines
-            float scanAlpha = intensity * 0.15f;
-            scanlineOverlay.color = new Color(0f, 0f, 0f, scanAlpha);
-            
-            // Random horizontal offset (glitch displacement)
-            if (intensity > 0.4f && Random.Range(0f, 1f) < 0.05f)
-            {
-                float offset = Random.Range(-5f, 5f) * intensity;
-                glitchOverlay.rectTransform.anchoredPosition = new Vector2(offset, 0);
-            }
-            else
-            {
-                glitchOverlay.rectTransform.anchoredPosition = Vector2.zero;
-            }
-        }
-        else
-        {
-            glitchOverlay.color = Color.clear;
-            scanlineOverlay.color = Color.clear;
-        }
-    }
-    
-    // ============================================
     // SCREEN SHAKE
     // ============================================
     
@@ -279,18 +205,6 @@ public class ScreenEffects : MonoBehaviour
         }
         vignetteTexture.SetPixels(pixels);
         vignetteTexture.Apply();
-        
-        // === Noise texture (random static) ===
-        noiseTexture = new Texture2D(128, 128, TextureFormat.RGBA32, false);
-        noiseTexture.wrapMode = TextureWrapMode.Repeat;
-        Color[] noisePixels = new Color[128 * 128];
-        for (int i = 0; i < noisePixels.Length; i++)
-        {
-            float v = Random.Range(0f, 1f);
-            noisePixels[i] = new Color(v, v, v, 1f);
-        }
-        noiseTexture.SetPixels(noisePixels);
-        noiseTexture.Apply();
     }
     
     void CreateEffectUI()
@@ -319,21 +233,9 @@ public class ScreenEffects : MonoBehaviour
         vignetteOverlay.type = Image.Type.Simple;
         vignetteOverlay.preserveAspect = false;
         
-        // === Glitch/noise overlay ===
-        glitchOverlay = CreateFullScreenImage("GlitchNoise", Color.clear);
-        glitchOverlay.sprite = Sprite.Create(noiseTexture,
-            new Rect(0, 0, 128, 128), new Vector2(0.5f, 0.5f));
-        glitchOverlay.type = Image.Type.Tiled;
-        
-        // === Scanline overlay ===
-        scanlineOverlay = CreateFullScreenImage("Scanlines", Color.clear);
-        CreateScanlineTexture();
-        
         // Disable raycast targets so effects don't block clicks
         damageOverlay.raycastTarget = false;
         vignetteOverlay.raycastTarget = false;
-        glitchOverlay.raycastTarget = false;
-        scanlineOverlay.raycastTarget = false;
         
         Debug.Log("[ScreenEffects] Effect overlays created");
     }
@@ -352,29 +254,9 @@ public class ScreenEffects : MonoBehaviour
         return img;
     }
     
-    void CreateScanlineTexture()
-    {
-        Texture2D scanTex = new Texture2D(1, 4, TextureFormat.RGBA32, false);
-        scanTex.wrapMode = TextureWrapMode.Repeat;
-        scanTex.filterMode = FilterMode.Point;
-        scanTex.SetPixels(new Color[]
-        {
-            new Color(0, 0, 0, 0.3f),
-            Color.clear,
-            Color.clear,
-            Color.clear
-        });
-        scanTex.Apply();
-        
-        scanlineOverlay.sprite = Sprite.Create(scanTex,
-            new Rect(0, 0, 1, 4), new Vector2(0.5f, 0.5f), 1f);
-        scanlineOverlay.type = Image.Type.Tiled;
-    }
-    
     void OnDestroy()
     {
         if (effectCanvas != null) Destroy(effectCanvas);
         if (vignetteTexture != null) Destroy(vignetteTexture);
-        if (noiseTexture != null) Destroy(noiseTexture);
     }
 }
