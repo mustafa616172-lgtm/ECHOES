@@ -101,6 +101,24 @@ public class SinglePlayerManager : MonoBehaviour
         HideMainMenuUI();
         
         Debug.Log("[SinglePlayerManager] === PLAYER SPAWNED - READY TO PLAY! ===");
+        
+        // Eye Blink Intro efektini baslat
+        StartEyeBlinkIntro();
+    }
+    
+    void StartEyeBlinkIntro()
+    {
+        if (currentPlayer == null) return;
+        
+        // EyeBlinkIntro component'ini player'a ekle ve baslat
+        EyeBlinkIntro blinkIntro = currentPlayer.GetComponent<EyeBlinkIntro>();
+        if (blinkIntro == null)
+        {
+            blinkIntro = currentPlayer.AddComponent<EyeBlinkIntro>();
+        }
+        blinkIntro.StartEffect();
+        
+        Debug.Log("[SinglePlayerManager] Eye Blink Intro efekti baslatildi");
     }
     
     void HideMainMenuUI()
@@ -168,10 +186,7 @@ public class SinglePlayerManager : MonoBehaviour
             }
             
             // Make sure it has pause menu
-            if (currentPlayer.GetComponent<SinglePlayerPauseMenu>() == null)
-            {
-                currentPlayer.AddComponent<SinglePlayerPauseMenu>();
-            }
+            
             
             Debug.Log("[SinglePlayerManager] Player prefab spawned successfully!");
         }
@@ -231,7 +246,6 @@ public class SinglePlayerManager : MonoBehaviour
         controller.mouseSensitivity = 2f;
         
         // Add pause menu for ESC functionality
-        currentPlayer.AddComponent<SinglePlayerPauseMenu>();
         
         Debug.Log("[SinglePlayerManager] Default player created at: " + position);
     }
