@@ -334,6 +334,32 @@ public class EchoDevice : MonoBehaviour
             if (modelCol != null) DestroyImmediate(modelCol);
             
             Debug.Log($"[EchoDevice] Device model active, WORLD pos: {deviceModel.transform.position}, parent: {deviceModel.transform.parent.name}");
+            
+            // Disable emission glow on the held device (so it doesn't look like a ghost object)
+            Renderer[] renderers = deviceModel.GetComponentsInChildren<Renderer>();
+            foreach (Renderer r in renderers)
+            {
+                if (r.material != null)
+                {
+                    r.material.DisableKeyword("_EMISSION");
+                    if (r.material.HasProperty("_EmissionColor"))
+                    {
+                        r.material.SetColor("_EmissionColor", Color.black);
+                    }
+                    // Also darken base color slightly if it was brightened by story sequence
+                    // (Though prefab shouldn't be affected, this is safety)
+                    if (r.material.HasProperty("_Color"))
+                    {
+                        Color baseColor = r.material.color;
+                        // Avoid pure white/transparent look if that was the issue
+                        if (baseColor.a < 1f) 
+                        {
+                            baseColor.a = 1f; // Force opaque
+                            r.material.color = baseColor;
+                        }
+                    }
+                }
+            }
         }
         
         Debug.Log($"[EchoDevice] Device equipped and ready! hasDevice={hasDevice}, pulseEffect={pulseEffect != null}");

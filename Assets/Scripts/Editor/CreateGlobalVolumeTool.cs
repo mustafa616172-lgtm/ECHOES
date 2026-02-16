@@ -11,7 +11,7 @@ namespace Echoes.Editor
         [MenuItem("Tools/ECHOES/Setup Night Atmosphere")]
         public static void SetupNightAtmosphere()
         {
-            Debug.Log("🌑 Starting Night Atmosphere Setup...");
+            Debug.Log("?? Starting Night Atmosphere Setup...");
 
             // 1. Create/Ensure Profile Exists
             VolumeProfile profile = GetOrCreateNightProfile();
@@ -21,7 +21,7 @@ namespace Echoes.Editor
             SetupSceneVolume(profile);
             SetupNightLighting();
 
-            Debug.Log("🌑 Night Atmosphere Setup Complete! Please check your Game view.");
+            Debug.Log("?? Night Atmosphere Setup Complete! Please check your Game view.");
         }
 
         private static VolumeProfile GetOrCreateNightProfile()
@@ -137,15 +137,18 @@ namespace Echoes.Editor
                 sun.type = LightType.Directional;
             }
 
-            // Configure Moon
+            // Configure Moon - DISABLED for complete darkness
+            sun.enabled = false;
             sun.color = new Color(0.6f, 0.7f, 0.9f); // Blue moonlight
-            sun.intensity = 0.2f; // Dim
-            sun.shadows = LightShadows.Soft;
+            sun.intensity = 0f; // Completely off
+            sun.shadows = LightShadows.None;
             sun.transform.rotation = Quaternion.Euler(50f, -30f, 0f); 
 
             // 2. Lighting Settings (Environment)
             RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.02f, 0.02f, 0.05f); // Very dark blue ambient
+            RenderSettings.ambientLight = Color.black; // Pitch black
+            RenderSettings.ambientIntensity = 0f;
+            RenderSettings.reflectionIntensity = 0f;
             RenderSettings.fog = true;
             RenderSettings.fogColor = new Color(0.01f, 0.01f, 0.03f); // Pitch dark fog
             RenderSettings.fogMode = FogMode.ExponentialSquared;

@@ -117,6 +117,15 @@ public class SimpleEchoPulseEffect : MonoBehaviour
             {
                 StartCoroutine(HighlightObject(rend));
             }
+
+            // Also check for EchoVisibleObjects (ghost figures, sound wave traces)
+            EchoVisibleObject echoVisible = col.GetComponent<EchoVisibleObject>();
+            if (echoVisible == null)
+                echoVisible = col.GetComponentInParent<EchoVisibleObject>();
+            if (echoVisible != null)
+            {
+                echoVisible.OnPulseReached();
+            }
         }
     }
     

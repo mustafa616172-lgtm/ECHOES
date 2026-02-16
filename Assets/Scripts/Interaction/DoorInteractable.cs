@@ -21,6 +21,11 @@ public class DoorInteractable : MonoBehaviour, IInteractable
     [Range(0f, 1f)]
     public float volume = 0.4f;
 
+    [Header("Lock")]
+    [Tooltip("Is this door currently locked?")]
+    public bool isLocked = false;
+    public string lockedPrompt = "Kilitli";
+
     [Header("Prompts")]
     public string openPrompt = "[E] Open Door";
     public string closePrompt = "[E] Close Door";
@@ -37,6 +42,7 @@ public class DoorInteractable : MonoBehaviour, IInteractable
     private AudioSource creakSource;
     private AudioClip proceduralOpenSound;
     private AudioClip proceduralCloseSound;
+    private AudioClip proceduralLockedSound;
     private AudioClip creakLoopSound;
     private float creakVolumeTarget = 0f;
 
@@ -159,11 +165,51 @@ public class DoorInteractable : MonoBehaviour, IInteractable
         }
         creakLoopSound.SetData(creakData, 0);
         creakSource.clip = creakLoopSound;
+
+        // LOCKED RATTLE: Quick metallic handle rattle
+        float lockedDuration = 0.25f;
+        int lockedSamples = (int)(sampleRate * lockedDuration);
+        proceduralLockedSound = AudioClip.Create("DoorLocked", lockedSamples, 1, sampleRate, false);
+        float[] lockedData = new float[lockedSamples];
+
+        for (int i = 0; i < lockedSamples; i++)
+        {
+            float t = (float)i / lockedSamples;
+
+            // Handle rattle - multiple metallic frequencies
+            float rattle = Mathf.Sin(2f * Mathf.PI * 600f * t) * 0.3f;
+            rattle += Mathf.Sin(2f * Mathf.PI * 900f * t) * 0.15f;
+            rattle *= (Mathf.PerlinNoise(t * 800f, 1f) * 0.6f + 0.4f); // Randomized amplitude
+
+            // Quick repeated hits (4 rattles)
+            float rattleEnv = 0f;
+            for (int r = 0; r < 4; r++)
+            {
+                float rattleStart = r * 0.06f;
+                float rattleLocal = t - rattleStart;
+                if (rattleLocal > 0f && rattleLocal < 0.04f)
+                    rattleEnv += Mathf.Exp(-rattleLocal * 80f);
+            }
+
+            // Latch clank
+            float clank = Mathf.Sin(2f * Mathf.PI * 350f * t) * 0.2f * Mathf.Exp(-t * 15f);
+
+            lockedData[i] = (rattle * rattleEnv + clank) * 0.4f;
+        }
+        proceduralLockedSound.SetData(lockedData, 0);
     }
 
     public void Interact()
     {
         if (isMoving) return;
+        if (isLocked)
+        {
+            // Play locked rattle sound
+            if (proceduralLockedSound != null && audioSource != null)
+                audioSource.PlayOneShot(proceduralLockedSound, volume * 0.8f);
+            Debug.Log("[DoorInteractable] Door is locked!");
+            return;
+        }
 
         isOpen = !isOpen;
         targetRotation = isOpen ? openRotation : closedRotation;
@@ -188,8 +234,100 @@ public class DoorInteractable : MonoBehaviour, IInteractable
         creakVolumeTarget = volume * 0.4f;
     }
 
+    /// <summary>
+    /// Lock the door (cannot be opened by player)
+    /// </summary>
+    public void Lock()
+    {
+        isLocked = true;
+        Debug.Log("[DoorInteractable] Door LOCKED: " + gameObject.name);
+    }
+
+    /// <summary>
+    /// Unlock the door
+    /// </summary>
+    public void Unlock()
+    {
+        isLocked = false;
+        Debug.Log("[DoorInteractable] Door UNLOCKED: " + gameObject.name);
+    }
+
+    /// <summary>
+    /// Programmatically close the door (for story events)
+    /// </summary>
+    public void ForceClose()
+    {
+        if (!isOpen && !isMoving) return;
+
+        // If currently animating, snap to current target first
+        if (isMoving)
+        {
+            transform.localRotation = targetRotation;
+            isMoving = false;
+        }
+
+        isOpen = false;
+        targetRotation = closedRotation;
+
+        AudioClip clip = customCloseSound != null ? customCloseSound : proceduralCloseSound;
+        if (clip != null && audioSource != null)
+            audioSource.PlayOneShot(clip, volume);
+
+        if (creakSource != null && !creakSource.isPlaying)
+            creakSource.Play();
+        creakVolumeTarget = volume * 0.4f;
+
+        Debug.Log("[DoorInteractable] Door FORCE CLOSED: " + gameObject.name);
+    }
+
+    /// <summary>
+    /// Programmatically open the door (for story events)
+    /// </summary>
+    public void ForceOpen()
+    {
+        if (isOpen && !isMoving) return;
+
+        // Snap if currently animating
+        if (isMoving)
+        {
+            transform.localRotation = targetRotation;
+            isMoving = false;
+        }
+
+        isLocked = false;
+        isOpen = true;
+        targetRotation = openRotation;
+
+        AudioClip clip = customOpenSound != null ? customOpenSound : proceduralOpenSound;
+        if (clip != null && audioSource != null)
+            audioSource.PlayOneShot(clip, volume);
+
+        if (creakSource != null && !creakSource.isPlaying)
+            creakSource.Play();
+        creakVolumeTarget = volume * 0.4f;
+
+        Debug.Log("[DoorInteractable] Door FORCE OPENED: " + gameObject.name);
+    }
+
+    /// <summary>
+    /// Check if door is currently open
+    /// </summary>
+    public bool IsDoorOpen()
+    {
+        return isOpen;
+    }
+
+    /// <summary>
+    /// Check if door is currently locked
+    /// </summary>
+    public bool IsDoorLocked()
+    {
+        return isLocked;
+    }
+
     public string GetInteractionPrompt()
     {
+        if (isLocked) return lockedPrompt;
         if (isMoving)
         {
             return isOpen ? "Opening..." : "Closing...";
