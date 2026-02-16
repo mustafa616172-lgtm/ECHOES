@@ -12,7 +12,7 @@ public class InventorySystem : MonoBehaviour
     public static InventorySystem Instance { get; private set; }
     
     // Item types
-    public enum ItemType { Key, Battery, Note, HealthKit, Misc }
+    public enum ItemType { Key, Battery, Note, HealthKit, EchoDevice, Misc }
     
     [System.Serializable]
     public class InventoryItem
@@ -22,14 +22,16 @@ public class InventorySystem : MonoBehaviour
         public ItemType type;
         public string description;
         public int quantity;
+        public Sprite icon; // Optional thumbnail/icon sprite
         
-        public InventoryItem(string id, string name, ItemType type, string desc = "", int qty = 1)
+        public InventoryItem(string id, string name, ItemType type, string desc = "", int qty = 1, Sprite icon = null)
         {
             this.id = id;
             this.displayName = name;
             this.type = type;
             this.description = desc;
             this.quantity = qty;
+            this.icon = icon;
         }
     }
     
@@ -72,6 +74,7 @@ public class InventorySystem : MonoBehaviour
     private Image[] gridCellBgs;
     private Text[] gridCellIcons;
     private Text[] gridCellQtys;
+    private Image[] gridCellImages; // Thumbnail sprites
     private int hoveredCell = -1;
     
     // Tooltip
@@ -257,6 +260,11 @@ public class InventorySystem : MonoBehaviour
         {
             existing.quantity += quantity;
         }
+        else if (existing != null && type == ItemType.EchoDevice)
+        {
+            // Don't add duplicate Echo device
+            return;
+        }
         else
         {
             items.Add(new InventoryItem(id, displayName, type, description, quantity));
@@ -280,6 +288,34 @@ public class InventorySystem : MonoBehaviour
         {
             ShowNote(displayName, description);
         }
+    }
+    
+    /// <summary>Add an item with a thumbnail sprite</summary>
+    public void AddItem(string id, string displayName, ItemType type, string description, Sprite icon, int quantity = 1)
+    {
+        InventoryItem existing = items.Find(i => i.id == id);
+        if (existing != null && type == ItemType.EchoDevice) return;
+        
+        if (existing != null && (type == ItemType.Battery || type == ItemType.HealthKit))
+        {
+            existing.quantity += quantity;
+            if (icon != null) existing.icon = icon;
+        }
+        else
+        {
+            items.Add(new InventoryItem(id, displayName, type, description, quantity, icon));
+        }
+        
+        if (type == ItemType.Key && KeyInventory.Instance != null)
+            KeyInventory.Instance.AddKey(id);
+        
+        ShowPickupNotification(displayName, type);
+        UpdateItemCount();
+        UpdateHotbarUI();
+        RefreshGrid();
+        
+        OnItemCollected?.Invoke(items.Find(i => i.id == id));
+        Debug.Log($"[Inventory] Added with thumbnail: {displayName} ({type})");
     }
     
     /// <summary>Use/consume an item by ID</summary>
@@ -361,9 +397,25 @@ public class InventorySystem : MonoBehaviour
             case ItemType.Note:
                 ShowNote(item.displayName, item.description);
                 return false; // Don't consume notes
+            case ItemType.EchoDevice:
+                ShowUseFeedback("Echo Cihazi zaten aktif!", new Color(0.2f, 0.8f, 1f));
+                return false; // Don't consume
             default:
                 return true; // Generic use
         }
+    }
+    
+    /// <summary>Remove an item from inventory by ID</summary>
+    public bool RemoveItem(string id)
+    {
+        InventoryItem item = items.Find(i => i.id == id);
+        if (item == null) return false;
+        
+        items.Remove(item);
+        UpdateItemCount();
+        UpdateHotbarUI();
+        Debug.Log($"[Inventory] Removed: {item.displayName}");
+        return true;
     }
     
     bool UseBattery()
@@ -832,8 +884,23 @@ public class InventorySystem : MonoBehaviour
                 
                 // Cell has item
                 gridCellBgs[i].color = new Color(typeColor.r * 0.15f, typeColor.g * 0.15f, typeColor.b * 0.15f, 0.85f);
-                gridCellIcons[i].text = GetTypeIcon(item.type);
-                gridCellIcons[i].color = typeColor;
+                
+                // Show thumbnail image if available, otherwise text icon
+                if (item.icon != null && gridCellImages != null && gridCellImages[i] != null)
+                {
+                    gridCellImages[i].sprite = item.icon;
+                    gridCellImages[i].color = Color.white;
+                    gridCellImages[i].enabled = true;
+                    gridCellIcons[i].text = ""; // Hide text when image is shown
+                }
+                else
+                {
+                    if (gridCellImages != null && gridCellImages[i] != null)
+                        gridCellImages[i].enabled = false;
+                    gridCellIcons[i].text = GetTypeIcon(item.type);
+                    gridCellIcons[i].color = typeColor;
+                }
+                
                 gridCellQtys[i].text = item.quantity > 1 ? $"x{item.quantity}" : "";
                 gridCellQtys[i].color = Color.white;
             }
@@ -843,6 +910,8 @@ public class InventorySystem : MonoBehaviour
                 gridCellBgs[i].color = new Color(0.06f, 0.06f, 0.1f, 0.5f);
                 gridCellIcons[i].text = "";
                 gridCellQtys[i].text = "";
+                if (gridCellImages != null && gridCellImages[i] != null)
+                    gridCellImages[i].enabled = false;
             }
         }
     }
@@ -972,6 +1041,7 @@ public class InventorySystem : MonoBehaviour
             case ItemType.Battery: return "Fenerin bataryasini sarj eder.";
             case ItemType.HealthKit: return "Kayip canini yeniler.";
             case ItemType.Note: return "Okunayi bekleyen bir yazi.";
+            case ItemType.EchoDevice: return "Ses dalgalariyla cevreni tarayabilen cihaz. [G] ile birak.";
             default: return "Bilinmeyen obje.";
         }
     }
@@ -984,6 +1054,7 @@ public class InventorySystem : MonoBehaviour
             case ItemType.HealthKit: return "[Sag Tikla] veya [H] Kullan";
             case ItemType.Note: return "[Sag Tikla] Oku";
             case ItemType.Key: return "Kapida otomatik kullanilir";
+            case ItemType.EchoDevice: return "[Q] Yanki Dalgasi  [G] Birak";
             default: return "[Sag Tikla] Kullan";
         }
     }
@@ -1491,6 +1562,7 @@ public class InventorySystem : MonoBehaviour
         gridCellBgs = new Image[GRID_TOTAL];
         gridCellIcons = new Text[GRID_TOTAL];
         gridCellQtys = new Text[GRID_TOTAL];
+        gridCellImages = new Image[GRID_TOTAL];
         
         for (int i = 0; i < GRID_TOTAL; i++)
         {
@@ -1539,6 +1611,20 @@ public class InventorySystem : MonoBehaviour
             iconRect.anchorMax = Vector2.one;
             iconRect.offsetMin = new Vector2(0, 8);
             iconRect.offsetMax = Vector2.zero;
+            
+            // Thumbnail image (overlaid on top of text, hidden by default)
+            GameObject imgObj = new GameObject("Thumbnail");
+            imgObj.transform.SetParent(cell.transform, false);
+            Image thumbImage = imgObj.AddComponent<Image>();
+            thumbImage.preserveAspect = true;
+            thumbImage.raycastTarget = false;
+            thumbImage.enabled = false; // Hidden until item has a sprite
+            gridCellImages[i] = thumbImage;
+            RectTransform imgRect = thumbImage.rectTransform;
+            imgRect.anchorMin = Vector2.zero;
+            imgRect.anchorMax = Vector2.one;
+            imgRect.offsetMin = new Vector2(4, 4);   // 4px padding
+            imgRect.offsetMax = new Vector2(-4, -4);
             
             // Quantity text (bottom-right)
             GameObject qtyObj = new GameObject("Qty");
@@ -1639,6 +1725,7 @@ public class InventorySystem : MonoBehaviour
             case ItemType.Battery: return "[P]";
             case ItemType.Note: return "[N]";
             case ItemType.HealthKit: return "[+]";
+            case ItemType.EchoDevice: return "[E]";
             default: return "[*]";
         }
     }
@@ -1651,6 +1738,7 @@ public class InventorySystem : MonoBehaviour
             case ItemType.Battery: return new Color(0.3f, 0.9f, 1f);
             case ItemType.Note: return new Color(0.9f, 0.85f, 0.7f);
             case ItemType.HealthKit: return new Color(0.2f, 1f, 0.2f);
+            case ItemType.EchoDevice: return new Color(0.2f, 0.8f, 1f);
             default: return Color.white;
         }
     }

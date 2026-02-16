@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// ECHOES - Echo Device Pickup Item
@@ -8,7 +8,7 @@ public class EchoPickupItem : MonoBehaviour, IInteractable
 {
     [Header("Echo Device Settings")]
     [SerializeField] private GameObject echoDevicePrefab;
-    [SerializeField] private string displayName = "Echo Cihazı";
+    [SerializeField] private string displayName = "Echo Cihazi";
     
     [Header("Visual")]
     [SerializeField] private bool enableGlow = true;
@@ -55,6 +55,10 @@ public class EchoPickupItem : MonoBehaviour, IInteractable
         }
     }
     
+    /// <summary>
+    /// Called when player presses E to pick up the Echo device.
+    /// Equips the device, adds to inventory, and hides the pickup object.
+    /// </summary>
     public void Interact()
     {
         if (collected) return;
@@ -82,10 +86,41 @@ public class EchoPickupItem : MonoBehaviour, IInteractable
             
             echoDevice.EquipEchoDevice(echoDevicePrefab);
             
+            // Store reference so EchoDevice can re-enable this object on drop
+            echoDevice.SetOriginalSceneObject(gameObject);
+            
+            // Generate thumbnail from the device model
+            Sprite thumbnail = null;
+            if (echoDevicePrefab != null)
+            {
+                thumbnail = ItemThumbnailGenerator.GenerateThumbnail(echoDevicePrefab, 128);
+            }
+            else
+            {
+                // Use this pickup object as source
+                thumbnail = ItemThumbnailGenerator.GenerateThumbnail(gameObject, 128);
+            }
+            
+            // Fallback to colored icon if thumbnail generation failed
+            if (thumbnail == null)
+            {
+                thumbnail = ItemThumbnailGenerator.GenerateColorIcon(new Color(0.2f, 0.8f, 1f), 64);
+            }
+            
+            // Add to inventory system with thumbnail
+            if (InventorySystem.Instance != null)
+            {
+                InventorySystem.Instance.AddItem("echo_device", displayName, 
+                    InventorySystem.ItemType.EchoDevice, 
+                    "Ses dalgalariyla cevreni tarayabilen cihaz.\n[Q] Yanki Dalgasi\n[Mouse Scroll] Frekans Ayari\n[G] Birak",
+                    thumbnail);
+                Debug.Log("[EchoPickupItem] Echo device added to inventory with thumbnail");
+            }
+            
             // Show tutorial UI
             if (InteractionUI.Instance != null)
             {
-                InteractionUI.Instance.ShowPrompt("Echo Cihazı Alındı!\n[Q] Yankı Dalgası\n[Mouse Scroll] Frekans Ayarı");
+                InteractionUI.Instance.ShowPrompt("Echo Cihazi Alindi!\n[Q] Yanki Dalgasi\n[Mouse Scroll] Frekans Ayari\n[G] Birak");
             }
             
             Debug.Log($"[EchoPickupItem] {displayName} collected and equipped successfully!");
@@ -102,8 +137,23 @@ public class EchoPickupItem : MonoBehaviour, IInteractable
             AudioSource.PlayClipAtPoint(pickupSound, transform.position);
         }
         
-        // Destroy the pickup item
-        Destroy(gameObject);
+        // Hide the pickup item (don't destroy - re-enabled when player drops the device)
+        gameObject.SetActive(false);
+    }
+    
+    /// <summary>
+    /// Called when the device is dropped and this object is re-enabled.
+    /// Resets state so it can be picked up again.
+    /// </summary>
+    void OnEnable()
+    {
+        // Reset collected flag when re-enabled (after being dropped)
+        if (collected)
+        {
+            collected = false;
+            startPosition = transform.position;
+            Debug.Log("[EchoPickupItem] Re-enabled after drop - ready for pickup again");
+        }
     }
     
     GameObject FindPlayer()
