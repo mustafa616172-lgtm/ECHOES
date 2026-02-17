@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
-using System.Collections;  
+using System.Collections;
+using System.Collections.Generic;  
 
 /// <summary>
 /// ECHOES - Echo Device Controller
@@ -26,12 +27,7 @@ public class EchoDevice : MonoBehaviour
     [SerializeField] private float pulseSpeed = 10f;
     [SerializeField] private float pulseDuration = 3f;
     [SerializeField] private float batteryConsumptionPerPulse = 5f;
-    
-    [Header("Frequency Settings")]
-    [SerializeField] private float currentFrequency = 440f; // Default A4 note
-    [SerializeField] private float minFrequency = 20f;
-    [SerializeField] private float maxFrequency = 20000f;
-    [SerializeField] private float frequencyScrollSpeed = 50f;
+    [SerializeField] private float pulseFrequency = 440f; // Fixed frequency for the visual effect
     
     [Header("Battery")]
     [SerializeField] private float maxBattery = 100f;
@@ -119,31 +115,12 @@ public class EchoDevice : MonoBehaviour
             return;
         }
         
-        HandleFrequencyAdjustment();
         HandlePulseActivation();
         HandleBatteryDrain();
         HandleDropInput();
     }
-    
-    void HandleFrequencyAdjustment()
-    {
-        float scroll = Input.GetAxis("Mouse ScrollWheel");
-        if (Mathf.Abs(scroll) > 0.01f)
-        {
-            float oldFrequency = currentFrequency;
-            currentFrequency += scroll * frequencyScrollSpeed;
-            currentFrequency = Mathf.Clamp(currentFrequency, minFrequency, maxFrequency);
-            
-            // Play frequency change sound (pitch based on frequency)
-            if (frequencyChangeSound != null && deviceAudioSource != null && Mathf.Abs(oldFrequency - currentFrequency) > 1f)
-            {
-                deviceAudioSource.pitch = Mathf.Lerp(0.8f, 1.2f, currentFrequency / maxFrequency);
-                deviceAudioSource.PlayOneShot(frequencyChangeSound, 0.3f);
-            }
-            
-            Debug.Log($"[EchoDevice] Frequency adjusted to: {currentFrequency:F1} Hz");
-        }
-    }
+        
+
     
     void HandlePulseActivation()
     {
@@ -189,7 +166,7 @@ public class EchoDevice : MonoBehaviour
             SimpleEchoPulseEffect simpleEffect = pulseEffect as SimpleEchoPulseEffect;
             if (simpleEffect != null)
             {
-                simpleEffect.TriggerPulse(pulseRadius, pulseSpeed, pulseDuration, currentFrequency);
+                simpleEffect.TriggerPulse(pulseRadius, pulseSpeed, pulseDuration, pulseFrequency);
                 Debug.Log("[EchoDevice] SimpleEchoPulseEffect triggered!");
             }
             else
@@ -197,7 +174,7 @@ public class EchoDevice : MonoBehaviour
                 EchoPulseEffect advancedEffect = pulseEffect as EchoPulseEffect;
                 if (advancedEffect != null)
                 {
-                    advancedEffect.TriggerPulse(pulseRadius, pulseSpeed, pulseDuration, currentFrequency);
+                    advancedEffect.TriggerPulse(pulseRadius, pulseSpeed, pulseDuration, pulseFrequency);
                     Debug.Log("[EchoDevice] EchoPulseEffect triggered!");
                 }
             }
@@ -219,7 +196,7 @@ public class EchoDevice : MonoBehaviour
             Debug.LogWarning("[EchoDevice] No pulse sound assigned (optional)");
         }
         
-        Debug.Log($"[EchoDevice] Pulse activated! Frequency: {currentFrequency:F1}Hz, Battery: {currentBattery:F1}%");
+        Debug.Log($"[EchoDevice] Pulse activated! Frequency: {pulseFrequency:F1}Hz, Battery: {currentBattery:F1}%");
     }
     
     void HandleBatteryDrain()
@@ -412,7 +389,6 @@ public class EchoDevice : MonoBehaviour
     public bool HasDevice => hasDevice;
     public float CurrentBattery => currentBattery;
     public float MaxBattery => maxBattery;
-    public float CurrentFrequency => currentFrequency;
     public float BatteryPercentage => (currentBattery / maxBattery) * 100f;
     
     // ============================================

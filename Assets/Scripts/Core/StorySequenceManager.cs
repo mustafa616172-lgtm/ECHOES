@@ -68,6 +68,12 @@ public class StorySequenceManager : MonoBehaviour
     [Tooltip("Voice line clip (Denek 47 frekans baslatiliyor) - leave empty for procedural")]
     public AudioClip voiceLineClip;
 
+    [Header("Horror Audio")]
+    [Tooltip("Woman Breathing Loop")]
+    public AudioClip womanBreathingClip;
+    [Tooltip("Woman Horror Scream One-Shot")]
+    public AudioClip horrorScreamClip;
+
     [Header("Timing")]
     [SerializeField] private float delayBeforeDoorClose = 1.5f;
     [SerializeField] private float delayBeforeVoiceLine = 2f;
@@ -131,6 +137,47 @@ public class StorySequenceManager : MonoBehaviour
         }
 
         Log("Initialized. State: " + currentState);
+
+        // Start breathing IMMEDIATELY (while screen is black)
+        StartBreathingOnSpeakers();
+    }
+
+    void StartBreathingOnSpeakers()
+    {
+        int speakerCount = 0;
+        if (speakers != null)
+        {
+            foreach (var speaker in speakers)
+            {
+                if (speaker != null)
+                {
+                    // Assign custom breathing clip if available
+                    if (womanBreathingClip != null)
+                    {
+                        speaker.SetBreathingClip(womanBreathingClip);
+                    }
+
+                    speaker.PlayBreathing();
+                    speakerCount++;
+                }
+            }
+        }
+        Log("Breathing started immediately on " + speakerCount + " speakers");
+    }
+
+    void StopBreathingOnSpeakers()
+    {
+        if (speakers != null)
+        {
+            foreach (var speaker in speakers)
+            {
+                if (speaker != null)
+                {
+                    speaker.StopBreathing(2.0f); // Fade out over 2 seconds
+                }
+            }
+        }
+        Log("Breathing stopped on speakers");
     }
 
     void OnDestroy()
@@ -181,6 +228,15 @@ public class StorySequenceManager : MonoBehaviour
 
         if (firstRoomReturnTrigger == null)
             firstRoomReturnTrigger = FindFirstObjectByType<FirstRoomTrigger>();
+
+#if UNITY_EDITOR
+        // Auto-assign audio clips from Resources or specific paths if missing
+        if (womanBreathingClip == null)
+            womanBreathingClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Ses/Ses Efektleri/Nefes/WomanBreathing.mp3");
+        
+        if (horrorScreamClip == null)
+            horrorScreamClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Ses/Ses Efektleri/Nefes/WomanScream.mp3");
+#endif
     }
 
     IEnumerator WaitForEyeBlinkThenStart(EyeBlinkIntro eyeBlinkIntro)
@@ -216,24 +272,17 @@ public class StorySequenceManager : MonoBehaviour
             mainDoor.ForceClose();
         }
 
-        // Start breathing on speakers (very faint)
-        yield return new WaitForSeconds(2f);
+        // Breathing already started in Start()
+        
+        // Wait a bit to ensure potential blink effect is mostly done
+        yield return new WaitForSeconds(0.5f);
+        
+        // STOP BREATHING NOW - User wants it only before wake up
+        StopBreathingOnSpeakers();
 
-        int speakerCount = 0;
-        if (speakers != null)
-        {
-            foreach (var speaker in speakers)
-            {
-                if (speaker != null)
-                {
-                    speaker.PlayBreathing();
-                    speakerCount++;
-                }
-            }
-        }
-
-        Log("Breathing started on " + speakerCount + " speakers");
         activeSequence = null;
+
+
     }
 
     // =============================================
@@ -285,9 +334,28 @@ public class StorySequenceManager : MonoBehaviour
         SetAllSpeakersMode(SpeakerMode.Static, 0.5f);
         yield return new WaitForSeconds(0.5f);
 
-        // Play voice line on first available speaker
-        if (voiceLineClip != null && speakers != null && speakers.Length > 0)
+        // Play horror scream (was voice line)
+        if (horrorScreamClip != null && speakers != null && speakers.Length > 0)
         {
+            SpeakerStaticNoise voiceSpeaker = GetFirstValidSpeaker();
+            if (voiceSpeaker != null)
+            {
+                bool voiceFinished = false;
+                // Play horror scream louder (0.7f volume)
+                voiceSpeaker.PlayVoiceLine(horrorScreamClip, 0.8f, () => { voiceFinished = true; });
+
+                // Wait for voice line to finish (with safety timeout)
+                float voiceWait = 0f;
+                while (!voiceFinished && voiceWait < maxVoiceLineWait)
+                {
+                    voiceWait += Time.deltaTime;
+                    yield return null;
+                }
+            }
+        }
+        else if (voiceLineClip != null && speakers != null && speakers.Length > 0)
+        {
+             // Fallback to original voice line if horror clip is missing
             SpeakerStaticNoise voiceSpeaker = GetFirstValidSpeaker();
             if (voiceSpeaker != null)
             {
@@ -301,9 +369,6 @@ public class StorySequenceManager : MonoBehaviour
                     voiceWait += Time.deltaTime;
                     yield return null;
                 }
-
-                if (voiceWait >= maxVoiceLineWait)
-                    LogWarning("Voice line timeout reached.");
             }
         }
         else

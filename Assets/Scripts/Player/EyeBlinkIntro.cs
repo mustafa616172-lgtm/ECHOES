@@ -43,12 +43,16 @@ public class EyeBlinkIntro : MonoBehaviour
     /// <summary>
     /// Efekti baslatir. SinglePlayerManager tarafindan cagirilir.
     /// </summary>
-    public void StartEffect()
+    /// <summary>
+    /// Efekti baslatir. SinglePlayerManager tarafindan cagirilir.
+    /// initialDelay: Efekt baslamadan onceki ek bekleme suresi (nefes sesi icin)
+    /// </summary>
+    public void StartEffect(float initialDelay = 0f)
     {
-        Debug.Log("[EyeBlinkIntro] StartEffect cagirildi");
+        Debug.Log("[EyeBlinkIntro] StartEffect cagirildi. Delay: " + initialDelay);
         CreateBlinkUI();
         DisableOtherCanvases();
-        StartCoroutine(MainSequence());
+        StartCoroutine(MainSequence(initialDelay));
     }
     
     void CreateBlinkUI()
@@ -165,7 +169,7 @@ public class EyeBlinkIntro : MonoBehaviour
         }
     }
     
-    IEnumerator MainSequence()
+    IEnumerator MainSequence(float initialDelay)
     {
         // 1 frame bekle - PlayerController.Start() calissin
         yield return null;
@@ -176,6 +180,16 @@ public class EyeBlinkIntro : MonoBehaviour
         {
             playerController.SetInputLock(true);
             Debug.Log("[EyeBlinkIntro] Input kilitlendi");
+        }
+
+        // Ensure lids are closed immediately
+        SetLidPosition(0f);
+        
+        // Ek bekleme suresi (Nefes sesi icin)
+        if (initialDelay > 0f)
+        {
+            Debug.Log("[EyeBlinkIntro] Initial delay bekleniyor: " + initialDelay);
+            yield return new WaitForSeconds(initialDelay);
         }
         
         // Ana animasyon

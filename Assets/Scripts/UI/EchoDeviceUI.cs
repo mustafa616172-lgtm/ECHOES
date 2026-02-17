@@ -111,26 +111,10 @@ public class EchoDeviceUI : MonoBehaviour
     {
         if (frequencyText == null) return;
         
-        float targetFrequency = echoDevice.CurrentFrequency;
-        
-        // Smooth frequency display for analog feel
-        if (animateFrequency)
+        // Frequency display removed from EchoDevice as it no longer handles frequency tuning.
+        if (frequencyText != null)
         {
-            displayedFrequency = Mathf.Lerp(displayedFrequency, targetFrequency, Time.deltaTime * frequencyUpdateSpeed);
-        }
-        else
-        {
-            displayedFrequency = targetFrequency;
-        }
-        
-        // Format frequency display (convert to kHz if > 1000 Hz)
-        if (displayedFrequency >= 1000f)
-        {
-            frequencyText.text = $"{displayedFrequency / 1000f:F2} kHz";
-        }
-        else
-        {
-            frequencyText.text = $"{displayedFrequency:F0} Hz";
+            frequencyText.text = "READY";
         }
     }
     

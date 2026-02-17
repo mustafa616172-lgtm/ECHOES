@@ -13,13 +13,13 @@ public class SpeakerStaticNoise : MonoBehaviour
 
     [Header("Noise Character")]
     [Range(0f, 1f)]
-    [SerializeField] private float noiseLevel = 0.3f;
+    [SerializeField] private float noiseLevel = 0f; // Was 0.3f
     [Range(0f, 1f)]
-    [SerializeField] private float crackleLevel = 0.5f;
+    [SerializeField] private float crackleLevel = 0f; // Was 0.5f
     [Range(0.001f, 0.05f)]
     [SerializeField] private float crackleRate = 0.008f;
     [Range(0f, 1f)]
-    [SerializeField] private float humLevel = 0.2f;
+    [SerializeField] private float humLevel = 0f; // Was 0.2f
     [SerializeField] private float humFrequency = 50f;
 
     [Header("3D Spatial Audio")]
@@ -72,67 +72,10 @@ public class SpeakerStaticNoise : MonoBehaviour
         int sampleRate = AudioSettings.outputSampleRate;
         int totalSamples = Mathf.CeilToInt(clipLength * sampleRate);
         float[] samples = new float[totalSamples];
-        System.Random rng = new System.Random(gameObject.GetInstanceID() + transform.position.GetHashCode());
-        float humPhase = 0f;
-        float humPhase2 = 0f;
-        float humPhase3 = 0f;
-        float dt = 1f / sampleRate;
-        float varPhase = (float)rng.NextDouble() * Mathf.PI * 2f;
-
-        for (int i = 0; i < totalSamples; i++)
-        {
-            float t = (float)i / sampleRate;
-            float sample = 0f;
-            float n1 = (float)rng.NextDouble() * 2f - 1f;
-            float n2 = (float)rng.NextDouble() * 2f - 1f;
-            sample += (n1 + n2) * 0.5f * noiseLevel;
-
-            if (rng.NextDouble() < crackleRate)
-            {
-                int popLen = 5 + rng.Next(25);
-                float popAmp = 0.5f + (float)rng.NextDouble() * 0.5f;
-                for (int p = 0; p < popLen && (i + p) < totalSamples; p++)
-                {
-                    float decay = 1f - (float)p / popLen;
-                    decay *= decay;
-                    samples[i + p] += ((float)rng.NextDouble() * 2f - 1f) * popAmp * decay * crackleLevel;
-                }
-            }
-
-            float hum = Mathf.Sin(humPhase) * humLevel;
-            humPhase += humFrequency * dt * Mathf.PI * 2f;
-            if (humPhase > Mathf.PI * 100f) humPhase -= Mathf.PI * 100f;
-            hum += Mathf.Sin(humPhase2) * humLevel * 0.35f;
-            humPhase2 += humFrequency * 2f * dt * Mathf.PI * 2f;
-            if (humPhase2 > Mathf.PI * 100f) humPhase2 -= Mathf.PI * 100f;
-            hum += Mathf.Sin(humPhase3) * humLevel * 0.15f;
-            humPhase3 += humFrequency * 3f * dt * Mathf.PI * 2f;
-            if (humPhase3 > Mathf.PI * 100f) humPhase3 -= Mathf.PI * 100f;
-            sample += hum;
-
-            float volumeMod = 0.7f + 0.3f * Mathf.Sin(t * 0.6f + varPhase);
-            volumeMod *= 0.8f + 0.2f * Mathf.Sin(t * 1.7f + varPhase * 0.3f);
-            if (rng.NextDouble() < 0.0003f)
-            {
-                int dropLen = sampleRate / 20 + rng.Next(sampleRate / 8);
-                for (int d = 0; d < dropLen && (i + d) < totalSamples; d++)
-                {
-                    float df = (float)d / dropLen;
-                    samples[i + d] *= df < 0.5f ? df * 2f : (1f - df) * 0.1f;
-                }
-            }
-            sample *= volumeMod;
-            samples[i] += Mathf.Clamp(sample, -0.9f, 0.9f);
-        }
-
-        int fadeLen = Mathf.Min(sampleRate / 2, totalSamples / 4);
-        for (int i = 0; i < fadeLen; i++)
-        {
-            float fade = (float)i / fadeLen;
-            int endIdx = totalSamples - fadeLen + i;
-            samples[endIdx] = samples[endIdx] * (1f - fade) + samples[i] * fade;
-        }
-
+        
+        // STATIC REMOVED BY REQUEST
+        // Return pure silence
+        
         AudioClip clip = AudioClip.Create("SpeakerStatic_" + gameObject.name, totalSamples, 1, sampleRate, false);
         clip.SetData(samples, 0);
         return clip;
@@ -210,7 +153,8 @@ public class SpeakerStaticNoise : MonoBehaviour
 
     public void TriggerHeavyStatic(float duration = 1.5f)
     {
-        StartCoroutine(HeavyStaticRoutine(duration));
+        // DISABLED BY REQUEST: No static noise anywhere
+        // StartCoroutine(HeavyStaticRoutine(duration));
     }
 
     /// <summary>
@@ -272,6 +216,14 @@ public class SpeakerStaticNoise : MonoBehaviour
     public void PlayBreathing()
     {
         SetMode(SpeakerMode.Breathing, 1.5f);
+    }
+
+    /// <summary>
+    /// Set a custom breathing clip at runtime
+    /// </summary>
+    public void SetBreathingClip(AudioClip clip)
+    {
+        breathingClip = clip;
     }
 
     /// <summary>

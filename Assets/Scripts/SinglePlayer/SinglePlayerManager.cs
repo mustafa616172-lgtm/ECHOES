@@ -116,9 +116,11 @@ public class SinglePlayerManager : MonoBehaviour
         {
             blinkIntro = currentPlayer.AddComponent<EyeBlinkIntro>();
         }
-        blinkIntro.StartEffect();
+        // EyeBlinkIntro efektini baslat
+        // 4 saniye nefes sesi icin bekle
+        blinkIntro.StartEffect(4.0f);
         
-        Debug.Log("[SinglePlayerManager] Eye Blink Intro efekti baslatildi");
+        Debug.Log("[SinglePlayerManager] Eye Blink Intro efekti baslatildi (4s gecikmeli)");
     }
     
     void HideMainMenuUI()

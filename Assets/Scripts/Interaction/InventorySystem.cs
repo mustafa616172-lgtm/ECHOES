@@ -12,7 +12,7 @@ public class InventorySystem : MonoBehaviour
     public static InventorySystem Instance { get; private set; }
     
     // Item types
-    public enum ItemType { Key, Battery, Note, HealthKit, EchoDevice, Misc }
+    public enum ItemType { Key, Battery, Note, HealthKit, EchoDevice, Misc, SoundRecorder }
     
     [System.Serializable]
     public class InventoryItem
@@ -260,9 +260,9 @@ public class InventorySystem : MonoBehaviour
         {
             existing.quantity += quantity;
         }
-        else if (existing != null && type == ItemType.EchoDevice)
+        else if (existing != null && (type == ItemType.EchoDevice || type == ItemType.SoundRecorder))
         {
-            // Don't add duplicate Echo device
+            // Don't add duplicate devices
             return;
         }
         else
@@ -294,7 +294,7 @@ public class InventorySystem : MonoBehaviour
     public void AddItem(string id, string displayName, ItemType type, string description, Sprite icon, int quantity = 1)
     {
         InventoryItem existing = items.Find(i => i.id == id);
-        if (existing != null && type == ItemType.EchoDevice) return;
+        if (existing != null && (type == ItemType.EchoDevice || type == ItemType.SoundRecorder)) return;
         
         if (existing != null && (type == ItemType.Battery || type == ItemType.HealthKit))
         {
@@ -400,6 +400,9 @@ public class InventorySystem : MonoBehaviour
             case ItemType.EchoDevice:
                 ShowUseFeedback("Echo Cihazi zaten aktif!", new Color(0.2f, 0.8f, 1f));
                 return false; // Don't consume
+            case ItemType.SoundRecorder:
+                ShowUseFeedback("Ses Kayit Cihazi zaten aktif! [Q] ile kullan", new Color(1f, 0.4f, 0.4f));
+                return false;
             default:
                 return true; // Generic use
         }

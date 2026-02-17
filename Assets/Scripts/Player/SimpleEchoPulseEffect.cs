@@ -135,21 +135,51 @@ public class SimpleEchoPulseEffect : MonoBehaviour
         
         // Save original emission
         Material mat = rend.material;
-        if (mat.HasProperty("_EmissionColor"))
+        Color originalEmission = Color.black;
+        bool hasEmission = mat.HasProperty("_EmissionColor");
+        
+        if (hasEmission)
         {
-            Color originalEmission = mat.GetColor("_EmissionColor");
+            originalEmission = mat.GetColor("_EmissionColor");
             originalEmissions[rend] = originalEmission;
             
             // Enable emission and set highlight color
             mat.EnableKeyword("_EMISSION");
             mat.SetColor("_EmissionColor", highlightColor);
         }
+        else
+        {
+            yield break; // Can't highlight without emission property
+        }
         
-        // Wait for duration
-        yield return new WaitForSeconds(highlightDuration);
+        // Wait a bit before fading start (keep bright for a moment)
+        yield return new WaitForSeconds(0.2f);
         
-        // Restore original emission
-        if (originalEmissions.ContainsKey(rend) && mat.HasProperty("_EmissionColor"))
+        // FADE OUT
+        float elapsed = 0f;
+        float fadeDuration = highlightDuration; // Use the duration for the fade
+        Color startColor = highlightColor;
+        
+        while (elapsed < fadeDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / fadeDuration;
+            // Smooth step for nicer fade
+            t = t * t * (3f - 2f * t);
+            
+            if (rend != null && mat != null)
+            {
+                mat.SetColor("_EmissionColor", Color.Lerp(startColor, originalEmission, t));
+            }
+            else
+            {
+                break; // Renderer destroyed
+            }
+            yield return null;
+        }
+        
+        // Restore original emission exactly
+        if (rend != null && mat != null && originalEmissions.ContainsKey(rend))
         {
             mat.SetColor("_EmissionColor", originalEmissions[rend]);
             originalEmissions.Remove(rend);
