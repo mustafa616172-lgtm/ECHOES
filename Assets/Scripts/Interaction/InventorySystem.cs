@@ -401,7 +401,7 @@ public class InventorySystem : MonoBehaviour
                 ShowUseFeedback("Echo Cihazi zaten aktif!", new Color(0.2f, 0.8f, 1f));
                 return false; // Don't consume
             case ItemType.SoundRecorder:
-                ShowUseFeedback("Ses Kayit Cihazi zaten aktif! [Q] ile kullan", new Color(1f, 0.4f, 0.4f));
+                ShowUseFeedback("Ses Kayit Cihazi zaten aktif! [F] ile ac/kapa", new Color(1f, 0.4f, 0.4f));
                 return false;
             default:
                 return true; // Generic use

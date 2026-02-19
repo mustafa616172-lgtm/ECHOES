@@ -1,0 +1,524 @@
+using UnityEngine;
+using System.Collections;
+
+/// <summary>
+/// ECHOES - Voice Lock Door
+/// A door that unlocks when the player plays back the correct recorded ghost clip nearby.
+/// Implements IInteractable for interaction prompt display.
+/// 
+/// Setup:
+/// 1. Place on a door GameObject with a collider
+/// 2. Set requiredClipID to match the GhostAudioSource.clipID that should unlock it
+/// 3. Assign doorModel (the transform that will animate during unlock)
+/// 
+/// Unlock Flow:
+/// 1. Player approaches and sees "Kilitli Kapi (Ses Kaydi Gerekli)" prompt
+/// 2. Player switches to Playback mode and plays the correct clip
+/// 3. Door detects matching clipID via SoundRecorderDevice.OnClipPlayed event
+/// 4. Unlock sequence: vibration -> cracks -> door opens
+/// </summary>
+public class VoiceLockDoor : MonoBehaviour, IInteractable
+{
+    [Header("Voice Lock Settings")]
+    [Tooltip("The clipID that unlocks this door (must match GhostAudioSource.clipID)")]
+    public string requiredClipID = "doctor_voice";
+    [Tooltip("Display name for the required voice (shown in UI hints)")]
+    public string requiredVoiceName = "Doktorun Sesi";
+    [Tooltip("How close the player must be while playing the clip")]
+    public float detectionRange = 5f;
+
+    [Header("Door")]
+    [Tooltip("The door model transform that will animate")]
+    public Transform doorModel;
+    [Tooltip("How long the unlock sequence takes")]
+    public float unlockDuration = 3f;
+    [Tooltip("Door open angle")]
+    public float openAngle = 90f;
+    [Tooltip("Which axis to rotate on (local)")]
+    public Vector3 rotationAxis = Vector3.up;
+
+    [Header("Audio")]
+    [Tooltip("Eerie creaking sound during unlock")]
+    public AudioClip doorCreakClip;
+    [Tooltip("Lock release/breaking sound")]
+    public AudioClip lockBreakClip;
+    [Tooltip("Ambient whisper loop while locked")]
+    public AudioClip lockedWhisperClip;
+    [Range(0f, 1f)] public float whisperVolume = 0.15f;
+
+    [Header("Visual Effects")]
+    [Tooltip("Light that seeps through cracks during unlock")]
+    public Light crackLight;
+    [Tooltip("Crack light color")]
+    public Color crackLightColor = new Color(0.8f, 0.4f, 0.1f, 1f);
+    [Tooltip("Maximum crack light intensity")]
+    public float crackLightMaxIntensity = 3f;
+    [Tooltip("Vibration intensity during unlock")]
+    public float vibrationIntensity = 0.02f;
+
+    [Header("State")]
+    [Tooltip("Is this door currently locked?")]
+    public bool isLocked = true;
+
+    // Runtime
+    private AudioSource audioSource;
+    private AudioSource whisperSource;
+    private bool isUnlocking = false;
+    private float unlockProgress = 0f;
+    private Vector3 doorOriginalPosition;
+    private Quaternion doorOriginalRotation;
+    private Transform playerTransform;
+    private bool playerInRange = false;
+    private bool correctClipPlaying = false;
+
+    // IInteractable implementation
+    public string GetInteractionPrompt()
+    {
+        if (!isLocked) return "";
+        if (isUnlocking) return "Aciliyor...";
+
+        if (correctClipPlaying)
+            return "[Ses Eslesiyor - Aciliyor...]";
+
+        SoundRecorderDevice device = SoundRecorderDevice.Instance;
+        if (device != null && device.IsActive)
+        {
+            if (device.CurrentMode == SoundRecorderDevice.DeviceMode.Playback)
+            {
+                if (device.GetRecordedClipCount() > 0)
+                    return "[Sol Tik] Kaydi Oynat";
+                else
+                    return "Kilitli Kapi - Ses Kaydi Gerekli";
+            }
+            else
+            {
+                return "Kilitli Kapi - Oynatma Moduna Gec [F]";
+            }
+        }
+
+        return "Kilitli Kapi (Ses Kaydi Gerekli)";
+    }
+
+    public void Interact()
+    {
+        if (!isLocked || isUnlocking) return;
+
+        // Show hint when player tries to interact
+        if (InteractionUI.Instance != null)
+        {
+            if (SoundRecorderDevice.Instance == null || !SoundRecorderDevice.Instance.IsActive)
+            {
+                InteractionUI.Instance.ShowMessage("Bu kapi kilitli. Ses kayit cihazi gerekli.", 3f);
+            }
+            else if (SoundRecorderDevice.Instance.CurrentMode != SoundRecorderDevice.DeviceMode.Playback)
+            {
+                InteractionUI.Instance.ShowMessage("Oynatma moduna gec [F] ve dogru sesi cal.", 3f);
+            }
+            else if (SoundRecorderDevice.Instance.GetRecordedClipCount() == 0)
+            {
+                InteractionUI.Instance.ShowMessage("Once bir hayalet sesini kaydetmelisin.", 3f);
+            }
+            else
+            {
+                InteractionUI.Instance.ShowMessage("Dogru kaydi sec [1-4] ve oynat [Sol Tik].", 3f);
+            }
+        }
+    }
+
+    void Start()
+    {
+        // Setup main audio source
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+            audioSource = gameObject.AddComponent<AudioSource>();
+        audioSource.playOnAwake = false;
+        audioSource.spatialBlend = 1f;
+
+        // Setup whisper ambient
+        if (lockedWhisperClip != null && isLocked)
+        {
+            GameObject whisperObj = new GameObject("LockedWhisper");
+            whisperObj.transform.SetParent(transform);
+            whisperObj.transform.localPosition = Vector3.zero;
+
+            whisperSource = whisperObj.AddComponent<AudioSource>();
+            whisperSource.clip = lockedWhisperClip;
+            whisperSource.loop = true;
+            whisperSource.volume = whisperVolume;
+            whisperSource.spatialBlend = 1f;
+            whisperSource.minDistance = 1f;
+            whisperSource.maxDistance = 8f;
+            whisperSource.Play();
+        }
+
+        // Store original door transform
+        if (doorModel != null)
+        {
+            doorOriginalPosition = doorModel.localPosition;
+            doorOriginalRotation = doorModel.localRotation;
+        }
+
+        // Setup crack light
+        if (crackLight == null)
+            CreateCrackLight();
+        if (crackLight != null)
+        {
+            crackLight.enabled = false;
+            crackLight.color = crackLightColor;
+        }
+
+        // Find player
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null) playerTransform = player.transform;
+
+        // Subscribe to SoundRecorderDevice events
+        StartCoroutine(SubscribeToDeviceEvents());
+
+        Debug.Log("[VoiceLockDoor] Initialized. Required clip: '" + requiredClipID + "', Locked=" + isLocked);
+    }
+
+    private IEnumerator SubscribeToDeviceEvents()
+    {
+        while (SoundRecorderDevice.Instance == null)
+            yield return new WaitForSeconds(0.5f);
+
+        SoundRecorderDevice.Instance.OnClipPlayed += OnDeviceClipPlayed;
+        SoundRecorderDevice.Instance.OnClipStopped += OnDeviceClipStopped;
+        Debug.Log("[VoiceLockDoor] Subscribed to SoundRecorderDevice events.");
+    }
+
+    void Update()
+    {
+        if (!isLocked) return;
+
+        // Check player proximity
+        if (playerTransform != null)
+        {
+            float dist = Vector3.Distance(transform.position, playerTransform.position);
+            playerInRange = dist <= detectionRange;
+        }
+
+        // Handle unlock progress
+        if (isUnlocking)
+        {
+            UpdateUnlockSequence();
+        }
+        // Check if correct clip is playing while player is in range
+        else if (correctClipPlaying && playerInRange)
+        {
+            StartUnlockSequence();
+        }
+    }
+
+    // ==========================================
+    // CLIP DETECTION
+    // ==========================================
+
+    private void OnDeviceClipPlayed(string clipID, Vector3 devicePosition)
+    {
+        if (!isLocked || isUnlocking) return;
+
+        if (clipID == requiredClipID)
+        {
+            correctClipPlaying = true;
+            Debug.Log("[VoiceLockDoor] Correct clip detected: '" + clipID + "'!");
+
+            float dist = Vector3.Distance(transform.position, devicePosition);
+            if (dist <= detectionRange)
+            {
+                StartUnlockSequence();
+            }
+            else
+            {
+                if (InteractionUI.Instance != null)
+                    InteractionUI.Instance.ShowMessage("Ses eslesti! Kapiya daha yakin gel.", 3f);
+            }
+        }
+        else
+        {
+            Debug.Log("[VoiceLockDoor] Wrong clip: '" + clipID + "' (need '" + requiredClipID + "')");
+
+            float dist = Vector3.Distance(transform.position, devicePosition);
+            if (dist <= detectionRange)
+            {
+                if (InteractionUI.Instance != null)
+                    InteractionUI.Instance.ShowMessage("Yanlis ses kaydi... Bu kapi baska bir ses istiyor.", 3f);
+
+                StartCoroutine(RejectRumble());
+            }
+        }
+    }
+
+    private void OnDeviceClipStopped()
+    {
+        correctClipPlaying = false;
+
+        if (isUnlocking && unlockProgress < 0.8f)
+        {
+            CancelUnlock();
+        }
+    }
+
+    // ==========================================
+    // UNLOCK SEQUENCE
+    // ==========================================
+
+    private void StartUnlockSequence()
+    {
+        if (isUnlocking) return;
+
+        isUnlocking = true;
+        unlockProgress = 0f;
+
+        if (crackLight != null)
+            crackLight.enabled = true;
+
+        if (doorCreakClip != null)
+        {
+            audioSource.clip = doorCreakClip;
+            audioSource.loop = true;
+            audioSource.volume = 0.3f;
+            audioSource.Play();
+        }
+
+        Debug.Log("[VoiceLockDoor] Unlock sequence STARTED!");
+    }
+
+    private void UpdateUnlockSequence()
+    {
+        unlockProgress += Time.deltaTime / unlockDuration;
+
+        // PHASE 1: Vibration (0% - 40%)
+        if (unlockProgress < 0.4f)
+        {
+            float vibPhase = unlockProgress / 0.4f;
+
+            if (doorModel != null)
+            {
+                Vector3 shake = new Vector3(
+                    Random.Range(-1f, 1f),
+                    Random.Range(-1f, 1f),
+                    Random.Range(-1f, 1f)
+                ) * vibrationIntensity * vibPhase;
+
+                doorModel.localPosition = doorOriginalPosition + shake;
+            }
+
+            if (crackLight != null)
+                crackLight.intensity = crackLightMaxIntensity * vibPhase * 0.3f;
+
+            if (audioSource.isPlaying)
+                audioSource.volume = Mathf.Lerp(0.3f, 0.6f, vibPhase);
+        }
+        // PHASE 2: Cracks appear (40% - 70%)
+        else if (unlockProgress < 0.7f)
+        {
+            float crackPhase = (unlockProgress - 0.4f) / 0.3f;
+
+            if (doorModel != null)
+            {
+                Vector3 shake = new Vector3(
+                    Random.Range(-1f, 1f),
+                    Random.Range(-1f, 1f),
+                    0f
+                ) * vibrationIntensity * 2f;
+
+                doorModel.localPosition = doorOriginalPosition + shake;
+            }
+
+            if (crackLight != null)
+            {
+                float flicker = 1f + Random.Range(-0.3f, 0.3f);
+                crackLight.intensity = crackLightMaxIntensity * (0.3f + crackPhase * 0.5f) * flicker;
+            }
+
+            if (audioSource.isPlaying)
+                audioSource.volume = Mathf.Lerp(0.6f, 0.9f, crackPhase);
+        }
+        // PHASE 3: Door opens (70% - 100%)
+        else if (unlockProgress < 1f)
+        {
+            float openPhase = (unlockProgress - 0.7f) / 0.3f;
+
+            if (doorModel != null)
+            {
+                doorModel.localPosition = doorOriginalPosition;
+                float angle = Mathf.Lerp(0f, openAngle, EaseOutBack(openPhase));
+                doorModel.localRotation = doorOriginalRotation * Quaternion.AngleAxis(angle, rotationAxis);
+            }
+
+            if (crackLight != null)
+                crackLight.intensity = Mathf.Lerp(crackLightMaxIntensity, 0f, openPhase);
+
+            if (audioSource.isPlaying)
+                audioSource.volume = Mathf.Lerp(0.9f, 0.2f, openPhase);
+        }
+        // COMPLETE
+        else
+        {
+            CompleteUnlock();
+        }
+    }
+
+    private void CompleteUnlock()
+    {
+        isLocked = false;
+        isUnlocking = false;
+        unlockProgress = 1f;
+
+        if (doorModel != null)
+        {
+            doorModel.localPosition = doorOriginalPosition;
+            doorModel.localRotation = doorOriginalRotation * Quaternion.AngleAxis(openAngle, rotationAxis);
+        }
+
+        if (lockBreakClip != null)
+        {
+            audioSource.Stop();
+            audioSource.loop = false;
+            audioSource.clip = lockBreakClip;
+            audioSource.volume = 0.8f;
+            audioSource.Play();
+        }
+        else
+        {
+            audioSource.Stop();
+        }
+
+        if (whisperSource != null)
+        {
+            StartCoroutine(FadeOutAudio(whisperSource, 2f));
+        }
+
+        if (crackLight != null)
+            crackLight.enabled = false;
+
+        if (SoundRecorderDevice.Instance != null)
+            SoundRecorderDevice.Instance.StopClipPlayback();
+
+        if (InteractionUI.Instance != null)
+            InteractionUI.Instance.ShowMessage("Kapi acildi!", 3f);
+
+        Debug.Log("[VoiceLockDoor] Door UNLOCKED with clip '" + requiredClipID + "'!");
+
+        if (SoundRecorderDevice.Instance != null)
+        {
+            SoundRecorderDevice.Instance.OnClipPlayed -= OnDeviceClipPlayed;
+            SoundRecorderDevice.Instance.OnClipStopped -= OnDeviceClipStopped;
+        }
+    }
+
+    private void CancelUnlock()
+    {
+        isUnlocking = false;
+        unlockProgress = 0f;
+
+        if (doorModel != null)
+        {
+            doorModel.localPosition = doorOriginalPosition;
+            doorModel.localRotation = doorOriginalRotation;
+        }
+
+        if (crackLight != null)
+        {
+            crackLight.intensity = 0f;
+            crackLight.enabled = false;
+        }
+
+        if (audioSource.isPlaying)
+            audioSource.Stop();
+
+        if (InteractionUI.Instance != null)
+            InteractionUI.Instance.ShowMessage("Ses kesildi! Kaydi calmaya devam et.", 3f);
+
+        Debug.Log("[VoiceLockDoor] Unlock CANCELLED (clip stopped too early).");
+    }
+
+    // ==========================================
+    // EFFECTS
+    // ==========================================
+
+    private IEnumerator RejectRumble()
+    {
+        if (doorModel == null) yield break;
+
+        float duration = 0.5f;
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
+
+            Vector3 shake = new Vector3(
+                Random.Range(-1f, 1f),
+                0f,
+                Random.Range(-1f, 1f)
+            ) * vibrationIntensity * (1f - t);
+
+            doorModel.localPosition = doorOriginalPosition + shake;
+            yield return null;
+        }
+
+        doorModel.localPosition = doorOriginalPosition;
+    }
+
+    private void CreateCrackLight()
+    {
+        GameObject lightObj = new GameObject("CrackLight");
+        lightObj.transform.SetParent(transform);
+        lightObj.transform.localPosition = new Vector3(0f, 1f, 0.05f);
+
+        crackLight = lightObj.AddComponent<Light>();
+        crackLight.type = LightType.Point;
+        crackLight.range = 3f;
+        crackLight.intensity = 0f;
+        crackLight.color = crackLightColor;
+        crackLight.shadows = LightShadows.Soft;
+    }
+
+    private IEnumerator FadeOutAudio(AudioSource source, float duration)
+    {
+        if (source == null) yield break;
+
+        float startVol = source.volume;
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            source.volume = Mathf.Lerp(startVol, 0f, elapsed / duration);
+            yield return null;
+        }
+
+        source.Stop();
+        source.volume = 0f;
+    }
+
+    // Easing function for dramatic door swing
+    private float EaseOutBack(float t)
+    {
+        float c1 = 1.70158f;
+        float c3 = c1 + 1f;
+        return 1f + c3 * Mathf.Pow(t - 1f, 3f) + c1 * Mathf.Pow(t - 1f, 2f);
+    }
+
+    // ==========================================
+    // CLEANUP
+    // ==========================================
+
+    void OnDestroy()
+    {
+        if (SoundRecorderDevice.Instance != null)
+        {
+            SoundRecorderDevice.Instance.OnClipPlayed -= OnDeviceClipPlayed;
+            SoundRecorderDevice.Instance.OnClipStopped -= OnDeviceClipStopped;
+        }
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = new Color(0f, 1f, 0.5f, 0.2f);
+        Gizmos.DrawWireSphere(transform.position, detectionRange);
+    }
+}

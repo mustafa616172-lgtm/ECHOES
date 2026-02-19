@@ -12,7 +12,6 @@ using System.Collections;
 ///   1-4       - Select clip slot (Playback mode)
 /// </summary>
 [RequireComponent(typeof(AudioSource))]
-[DisallowMultipleComponent]
 public class SoundRecorderDevice : MonoBehaviour
 {
     public static SoundRecorderDevice Instance;
@@ -97,8 +96,6 @@ public class SoundRecorderDevice : MonoBehaviour
 
     // Battery state
     private bool batteryDead = false;
-    private bool batteryWarning20 = false;
-    private bool batteryWarning10 = false;
 
     // Recording state
     private RecordingState recordingState = RecordingState.Idle;
@@ -113,7 +110,6 @@ public class SoundRecorderDevice : MonoBehaviour
     private AudioSource playbackAudioSource;
     private float playbackPhase = 0f;
     private float playbackWobblePhase = 0f;
-    private PlaybackDistortionFilter distortionFilter;
 
     // Events
     public delegate void ClipPlayedEvent(string clipID, Vector3 devicePosition);
@@ -133,13 +129,8 @@ public class SoundRecorderDevice : MonoBehaviour
 
     void Awake()
     {
-        // FIX #1: Singleton pattern - return immediately after Destroy
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-            return; // CRITICAL: prevent CreatePlaybackAudioSource from running
-        }
-        Instance = this;
+        if (Instance == null) Instance = this;
+        else if (Instance != this) Destroy(gameObject);
 
         audioSource = GetComponent<AudioSource>();
         audioSource.playOnAwake = false;
@@ -158,23 +149,12 @@ public class SoundRecorderDevice : MonoBehaviour
             recordedClips[i] = new RecordedClipData { hasClip = false };
         }
 
-        // FIX #2: Check for existing playback source before creating
-        CreateOrFindPlaybackAudioSource();
+        // Create separate playback AudioSource
+        CreatePlaybackAudioSource();
     }
-    // FIX #2: Check for existing playback child before creating new one
-    private void CreateOrFindPlaybackAudioSource()
-    {
-        // Check if PlaybackAudio child already exists
-        Transform existingChild = transform.Find("PlaybackAudio");
-        if (existingChild != null)
-        {
-            playbackAudioSource = existingChild.GetComponent<AudioSource>();
-            distortionFilter = existingChild.GetComponent<PlaybackDistortionFilter>();
-            if (distortionFilter != null) distortionFilter.recorderDevice = this;
-            return;
-        }
 
-        // Create new playback audio source
+    private void CreatePlaybackAudioSource()
+    {
         GameObject playbackObj = new GameObject("PlaybackAudio");
         playbackObj.transform.SetParent(transform);
         playbackObj.transform.localPosition = Vector3.zero;
@@ -182,13 +162,14 @@ public class SoundRecorderDevice : MonoBehaviour
         playbackAudioSource = playbackObj.AddComponent<AudioSource>();
         playbackAudioSource.playOnAwake = false;
         playbackAudioSource.spatialBlend = 1f;
-        playbackAudioSource.loop = false; // FIX #6: No loop, play once
+        playbackAudioSource.loop = false;
         playbackAudioSource.volume = 0.8f;
         playbackAudioSource.minDistance = 1f;
         playbackAudioSource.maxDistance = 10f;
 
-        distortionFilter = playbackObj.AddComponent<PlaybackDistortionFilter>();
-        distortionFilter.recorderDevice = this;
+        // Add distortion filter to playback audio
+        PlaybackDistortionFilter distFilter = playbackObj.AddComponent<PlaybackDistortionFilter>();
+        distFilter.recorderDevice = this;
     }
 
     void Update()
@@ -201,9 +182,6 @@ public class SoundRecorderDevice : MonoBehaviour
             float drain = GetCurrentDrainRate();
             currentBattery -= drain * Time.deltaTime;
             currentBattery = Mathf.Max(0f, currentBattery);
-
-            // FIX #12: Battery low warnings
-            CheckBatteryWarnings();
 
             if (currentBattery <= 0f)
             {
@@ -245,28 +223,6 @@ public class SoundRecorderDevice : MonoBehaviour
     }
 
     // ==========================================
-    // BATTERY WARNINGS (FIX #12)
-    // ==========================================
-
-    private void CheckBatteryWarnings()
-    {
-        float batteryPercent = currentBattery / maxBattery;
-
-        if (!batteryWarning20 && batteryPercent <= 0.2f && batteryPercent > 0.1f)
-        {
-            batteryWarning20 = true;
-            if (InteractionUI.Instance != null)
-                InteractionUI.Instance.ShowMessage("[Dusuk Pil] %20 - Cihaz yakinda kapanacak!", 3f);
-        }
-        else if (!batteryWarning10 && batteryPercent <= 0.1f)
-        {
-            batteryWarning10 = true;
-            if (InteractionUI.Instance != null)
-                InteractionUI.Instance.ShowMessage("[Kritik Pil] %10 - Pil neredeyse bitti!", 3f);
-        }
-    }
-
-    // ==========================================
     // MODE CYCLING
     // ==========================================
 
@@ -297,9 +253,7 @@ public class SoundRecorderDevice : MonoBehaviour
             InteractionUI.Instance.ShowMessage("Mod: " + modeName, 1.5f);
 
         OnModeChanged?.Invoke(currentMode);
-#if UNITY_EDITOR
         Debug.Log("[SoundRecorderDevice] Mode changed to: " + currentMode);
-#endif
     }
 
     private string GetModeDisplayName(DeviceMode mode)
@@ -399,6 +353,7 @@ public class SoundRecorderDevice : MonoBehaviour
         if (Input.GetMouseButtonDown(1) && recordingState != RecordingState.Idle)
             CancelRecording();
     }
+
     private void TryStartRecording()
     {
         int emptySlot = FindEmptyClipSlot();
@@ -439,18 +394,14 @@ public class SoundRecorderDevice : MonoBehaviour
 
         if (bestTarget != null)
         {
-#if UNITY_EDITOR
             Debug.Log("[SoundRecorderDevice] Scanning... Found target: '" + bestTarget.clipID + "' at distance " + closestDist.ToString("F1") + "m");
-#endif
             if (InteractionUI.Instance != null)
                 InteractionUI.Instance.ShowMessage("Ses algilandi: " + bestTarget.clipDisplayName, 1f);
         }
-#if UNITY_EDITOR
         else
         {
             Debug.Log("[SoundRecorderDevice] Scanning... No GhostSound targets in range.");
         }
-#endif
 
         OnRecordingStateChanged?.Invoke(RecordingState.Scanning, 0f);
     }
@@ -466,9 +417,7 @@ public class SoundRecorderDevice : MonoBehaviour
             InteractionUI.Instance.ShowMessage("Kaydediliyor: " + currentRecordingTarget.clipDisplayName + "...", recordingDuration);
 
         OnRecordingStateChanged?.Invoke(RecordingState.Recording, 0f);
-#if UNITY_EDITOR
         Debug.Log("[SoundRecorderDevice] Recording started: '" + currentRecordingTarget.clipID + "'");
-#endif
     }
 
     private void UpdateRecordingProgress()
@@ -507,9 +456,7 @@ public class SoundRecorderDevice : MonoBehaviour
             recordedClips[slot] = clipData;
             selectedClipSlot = slot;
 
-#if UNITY_EDITOR
             Debug.Log("[SoundRecorderDevice] Recording COMPLETE! '" + clipData.clipID + "' stored in slot " + (slot + 1));
-#endif
 
             if (InteractionUI.Instance != null)
                 InteractionUI.Instance.ShowMessage("Ses kaydedildi: " + clipData.clipName + " [Slot " + (slot + 1) + "]", 3f);
@@ -548,9 +495,7 @@ public class SoundRecorderDevice : MonoBehaviour
         scanCooldown = 0.5f;
 
         OnRecordingStateChanged?.Invoke(RecordingState.Idle, 0f);
-#if UNITY_EDITOR
         Debug.Log("[SoundRecorderDevice] Recording cancelled.");
-#endif
     }
 
     private int FindEmptyClipSlot()
@@ -584,14 +529,11 @@ public class SoundRecorderDevice : MonoBehaviour
                 PlaySelectedClip();
         }
 
-        // FIX #6: Auto-stop detection works correctly now (loop=false)
         if (isPlayingClip && playbackAudioSource != null && !playbackAudioSource.isPlaying)
         {
             isPlayingClip = false;
             OnClipStopped?.Invoke();
-#if UNITY_EDITOR
-            Debug.Log("[SoundRecorderDevice] Playback finished naturally.");
-#endif
+            Debug.Log("[SoundRecorderDevice] Playback finished.");
         }
     }
 
@@ -615,9 +557,7 @@ public class SoundRecorderDevice : MonoBehaviour
                 InteractionUI.Instance.ShowMessage("Slot " + (slot + 1) + ": [Bos]", 1f);
         }
 
-#if UNITY_EDITOR
         Debug.Log("[SoundRecorderDevice] Selected slot " + (slot + 1));
-#endif
     }
 
     private void PlaySelectedClip()
@@ -633,7 +573,7 @@ public class SoundRecorderDevice : MonoBehaviour
         }
 
         playbackAudioSource.clip = clip.audioClip;
-        playbackAudioSource.loop = true; // Loop until manually stopped or door unlocks
+        playbackAudioSource.loop = true;
         playbackAudioSource.Play();
         isPlayingClip = true;
         playbackPhase = 0f;
@@ -644,9 +584,7 @@ public class SoundRecorderDevice : MonoBehaviour
         if (InteractionUI.Instance != null)
             InteractionUI.Instance.ShowMessage("Calinyor: " + clip.clipName + " [Sol Tik = Durdur]", 2f);
 
-#if UNITY_EDITOR
         Debug.Log("[SoundRecorderDevice] Playing clip '" + clip.clipID + "' from slot " + (selectedClipSlot + 1));
-#endif
     }
 
     public void StopClipPlayback()
@@ -656,10 +594,9 @@ public class SoundRecorderDevice : MonoBehaviour
 
         isPlayingClip = false;
         OnClipStopped?.Invoke();
-#if UNITY_EDITOR
         Debug.Log("[SoundRecorderDevice] Playback stopped.");
-#endif
     }
+
     // ==========================================
     // BATTERY MANAGEMENT
     // ==========================================
@@ -686,9 +623,7 @@ public class SoundRecorderDevice : MonoBehaviour
     private void HandleBatteryDeath()
     {
         batteryDead = true;
-#if UNITY_EDITOR
         Debug.Log("[SoundRecorderDevice] BATTERY DEAD!");
-#endif
 
         if (recordingState != RecordingState.Idle)
             CancelRecording();
@@ -712,7 +647,6 @@ public class SoundRecorderDevice : MonoBehaviour
     {
         if (!isHeld || audioSource == null) return;
         if (currentMode != DeviceMode.FrequencyTuner) return;
-        if (random == null) return; // Guard: audio thread may fire before Awake
 
         double gain = volume;
         double increment = currentFrequency * 2.0 * Mathf.PI / sampling_frequency;
@@ -741,7 +675,6 @@ public class SoundRecorderDevice : MonoBehaviour
     public void ApplyPlaybackDistortion(float[] data, int channels)
     {
         if (!isPlayingClip) return;
-        if (random == null) return; // Guard for audio thread safety
 
         float sampleRate = (float)sampling_frequency;
 
@@ -880,10 +813,6 @@ public class SoundRecorderDevice : MonoBehaviour
 
         if (deviceLight == null)
             CreateDeviceLight();
-
-        // Reset battery warnings on pickup
-        batteryWarning20 = false;
-        batteryWarning10 = false;
     }
 
     private void CreateDeviceLight()
@@ -905,33 +834,7 @@ public class SoundRecorderDevice : MonoBehaviour
         }
 
         deviceLight.enabled = true;
-#if UNITY_EDITOR
         Debug.Log("[SoundRecorderDevice] Device light created/found.");
-#endif
-    }
-
-    // ==========================================
-    // CLEANUP (FIX #11)
-    // ==========================================
-
-    void OnDisable()
-    {
-        if (isPlayingClip)
-            StopClipPlayback();
-        if (recordingState != RecordingState.Idle)
-            CancelRecording();
-    }
-
-    void OnDestroy()
-    {
-        // Clean up singleton reference
-        if (Instance == this)
-            Instance = null;
-
-        // Destroy playback child if it exists
-        Transform playbackChild = transform.Find("PlaybackAudio");
-        if (playbackChild != null)
-            Destroy(playbackChild.gameObject);
     }
 
     // ==========================================
@@ -980,14 +883,10 @@ public class SoundRecorderDevice : MonoBehaviour
         if (batteryDead && currentBattery > 0f)
         {
             batteryDead = false;
-            batteryWarning20 = false;
-            batteryWarning10 = false;
             if (currentMode == DeviceMode.FrequencyTuner && audioSource != null && !audioSource.isPlaying)
                 audioSource.Play();
             if (deviceLight != null) deviceLight.enabled = true;
-#if UNITY_EDITOR
             Debug.Log("[SoundRecorderDevice] Battery recharged! " + currentBattery.ToString("F0") + "%");
-#endif
         }
     }
 }

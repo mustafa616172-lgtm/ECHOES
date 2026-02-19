@@ -33,6 +33,18 @@ public class InteractionUI : MonoBehaviour
         else if (legacyPromptText != null) legacyPromptText.text = message;
     }
 
+    public void ShowMessage(string message, float duration)
+    {
+        ShowPrompt(message);
+        StartCoroutine(HidePromptAfterDelay(duration));
+    }
+
+    private System.Collections.IEnumerator HidePromptAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        HidePrompt();
+    }
+
     public void HidePrompt()
     {
         if (promptPanel != null) promptPanel.SetActive(false);
