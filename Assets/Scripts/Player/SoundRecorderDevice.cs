@@ -1,993 +1,458 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 /// <summary>
-/// ECHOES - Sound Recorder Device (Extended)
-/// 3-Mode device: FrequencyTuner (existing resonance system), Recorder (ghost sound capture), Playback (distorted playback).
-/// 
-/// Controls:
-///   F         - Cycle mode (Tuner -> Recorder -> Playback)
-///   Scroll    - Frequency tuning (Tuner mode)
-///   Left Click- Record (Recorder mode) / Play-Stop (Playback mode)
-///   1-4       - Select clip slot (Playback mode)
+/// ECHOES - Sound Recorder Device
+/// A separate device from the Echo Device.
+/// Functions:
+/// 1. Frequency Tuning (Mouse Scroll)
+/// 2. Resonance Interaction (Opening doors)
+/// 3. Pickup/Drop (E/G)
+/// 4. Activation (Q)
 /// </summary>
-[RequireComponent(typeof(AudioSource))]
-[DisallowMultipleComponent]
 public class SoundRecorderDevice : MonoBehaviour
 {
-    public static SoundRecorderDevice Instance;
-
-    // ==========================================
-    // DEVICE MODE
-    // ==========================================
-    public enum DeviceMode { FrequencyTuner, Recorder, Playback }
-    public enum RecordingState { Idle, Scanning, Recording, Done }
-
-    [Header("Device Mode")]
-    public DeviceMode currentMode = DeviceMode.FrequencyTuner;
-
+    [Header("Device Settings")]
+    [SerializeField] private bool hasDevice = false;
+    [SerializeField] private GameObject deviceModel; // The visual model in hand
+    [SerializeField] private Transform deviceHoldPosition;
+    
+    [Header("Drop Settings")]
+    [SerializeField] private KeyCode dropKey = KeyCode.G;
+    [SerializeField] private float dropForwardDistance = 1.5f;
+    [SerializeField] private float dropTossForce = 2f;
+    [SerializeField] private GameObject pickupPrefab;
+    
+    [Header("Activation")]
+    [SerializeField] private KeyCode activationKey = KeyCode.Q;
+    [SerializeField] private bool isActive = false;
+    
     [Header("Frequency Settings")]
-    public float currentFrequency = 300f;
-    public float minFrequency = 200f;
-    public float maxFrequency = 800f;
-    public float scrollSensitivity = 10f;
+    [SerializeField] private float currentFrequency = 440f; // Default A4 note
+    [SerializeField] private float minFrequency = 20f;
+    [SerializeField] private float maxFrequency = 20000f;
+    [SerializeField] private float frequencyScrollSpeed = 50f;
+    
+    [Header("Visual Feedback")]
+    [Tooltip("Renderers to change color based on resonance")]
+    [SerializeField] private List<Renderer> indicatorRenderers = new List<Renderer>();
+    [SerializeField] private bool generateDynamicLights = true;
+    
+    [Header("Audio")]
+    [SerializeField] private AudioSource deviceAudioSource;
+    [SerializeField] private AudioClip frequencyChangeSound;
+    [SerializeField] private AudioClip activationSound;
+    
+    [Header("Device Model Positioning")]
+    [Tooltip("Offset from camera for device position")]
+    [SerializeField] private Vector3 deviceHandOffset = new Vector3(0.3f, -0.25f, 0.4f);
+    [Tooltip("Rotation of device when held")]
+    [SerializeField] private Vector3 deviceHandRotation = new Vector3(-15f, -10f, 0f);
+    [Tooltip("Scale of device when held")]
+    [SerializeField] private Vector3 deviceHandScale = new Vector3(1f, 1f, 1f);
 
-    [Header("Frequency Drift")]
-    [Tooltip("Max Hz drift per second")]
-    public float driftAmount = 4f;
-    [Tooltip("How fast the drift oscillates")]
-    public float driftSpeed = 0.3f;
-    [Tooltip("Higher = drift stabilizes more near resonance")]
-    [Range(0f, 1f)] public float driftStabilization = 0.7f;
+    // Internal state
+    private float resonanceResetTimer = 0f;
+    private bool isResonating = false;
+    private float currentTargetFrequency = 440f;
+    private Camera playerCamera;
+    private GameObject originalSceneObject;
 
-    [Header("Audio Settings")]
-    [Range(0f, 1f)] public float volume = 0.5f;
-    [Range(0f, 1f)] public float baseNoiseAmount = 0.3f;
+    // Public properties
+    public bool HasDevice => hasDevice;
+    public float CurrentFrequency => currentFrequency;
+    public bool IsActive => isActive;
 
-    [Header("Aura Feedback")]
-    public Light deviceLight;
-    public float lightIntensity = 1.5f;
-    public float lightRange = 3f;
-
-    [Header("Battery")]
-    public float maxBattery = 100f;
-    public float currentBattery = 100f;
-    [Tooltip("Drain per second while ResonanceUI is open")]
-    public float batteryDrainRate = 2f;
-    [Tooltip("Drain per second while held but UI closed")]
-    public float batteryIdleDrain = 0.1f;
-    [Tooltip("Drain per second while recording")]
-    public float batteryRecordDrain = 5f;
-    [Tooltip("Drain per second while playing back")]
-    public float batteryPlaybackDrain = 3f;
-
-    // ==========================================
-    // RECORDING SYSTEM
-    // ==========================================
-    [Header("Recording")]
-    [Tooltip("How close to a GhostAudioSource to record")]
-    public float scanRadius = 6f;
-    [Tooltip("Duration of recording process in seconds")]
-    public float recordingDuration = 2.5f;
-    [Tooltip("Maximum number of recorded clips")]
-    public int maxClipSlots = 4;
-
-    [Header("Playback Distortion")]
-    [Tooltip("How much pitch wobble during playback (ghostly feel)")]
-    [Range(0f, 0.1f)] public float pitchWobbleAmount = 0.03f;
-    [Tooltip("Bit crush intensity (lower = more crushed)")]
-    [Range(1, 16)] public int bitCrushDepth = 6;
-    [Tooltip("Ring modulation frequency for eerie undertone")]
-    public float ringModFrequency = 30f;
-    [Tooltip("Static noise overlay during playback")]
-    [Range(0f, 0.3f)] public float playbackNoiseAmount = 0.12f;
-
-    // Runtime state - Frequency tuner
-    [HideInInspector] public bool isHeld = false;
-    private AudioSource audioSource;
-    private double phase;
-    private System.Random random;
-    private double sampling_frequency = 48000.0;
-
-    // Resonance state (set by ResonanceDoor)
-    private float resonanceQuality = 0f;
-    private float currentNoiseAmount;
-    private float targetNoiseAmount;
-    private float driftSeed;
-
-    // Battery state
-    private bool batteryDead = false;
-    private bool batteryWarning20 = false;
-    private bool batteryWarning10 = false;
-
-    // Recording state
-    private RecordingState recordingState = RecordingState.Idle;
-    private RecordedClipData[] recordedClips;
-    private int selectedClipSlot = 0;
-    private float recordingProgress = 0f;
-    private GhostAudioSource currentRecordingTarget = null;
-    private float scanCooldown = 0f;
-
-    // Playback state
-    private bool isPlayingClip = false;
-    private AudioSource playbackAudioSource;
-    private float playbackPhase = 0f;
-    private float playbackWobblePhase = 0f;
-    private PlaybackDistortionFilter distortionFilter;
-
-    // Events
-    public delegate void ClipPlayedEvent(string clipID, Vector3 devicePosition);
-    public event ClipPlayedEvent OnClipPlayed;
-
-    public delegate void ClipStoppedEvent();
-    public event ClipStoppedEvent OnClipStopped;
-
-    public delegate void ModeChangedEvent(DeviceMode newMode);
-    public event ModeChangedEvent OnModeChanged;
-
-    public delegate void RecordingStateChangedEvent(RecordingState newState, float progress);
-    public event RecordingStateChangedEvent OnRecordingStateChanged;
-
-    public delegate void ClipRecordedEvent(int slotIndex, RecordedClipData clipData);
-    public event ClipRecordedEvent OnClipRecorded;
-
-    void Awake()
+    void Start()
     {
-        // FIX #1: Singleton pattern - return immediately after Destroy
-        if (Instance != null && Instance != this)
+        playerCamera = GetComponentInChildren<Camera>();
+        if (playerCamera == null) playerCamera = Camera.main;
+
+        // Auto-detect renderers if not assigned
+        if (indicatorRenderers.Count == 0)
         {
-            Destroy(gameObject);
-            return; // CRITICAL: prevent CreatePlaybackAudioSource from running
+            GameObject targetRoot = deviceModel != null ? deviceModel : gameObject;
+            indicatorRenderers.AddRange(targetRoot.GetComponentsInChildren<Renderer>());
         }
-        Instance = this;
-
-        audioSource = GetComponent<AudioSource>();
-        audioSource.playOnAwake = false;
-        audioSource.spatialBlend = 1.0f;
-        random = new System.Random();
-        sampling_frequency = AudioSettings.outputSampleRate;
-
-        currentNoiseAmount = baseNoiseAmount;
-        targetNoiseAmount = baseNoiseAmount;
-        driftSeed = Random.Range(0f, 1000f);
-
-        // Initialize clip storage
-        recordedClips = new RecordedClipData[maxClipSlots];
-        for (int i = 0; i < maxClipSlots; i++)
+        
+        if (deviceAudioSource == null)
         {
-            recordedClips[i] = new RecordedClipData { hasClip = false };
+            deviceAudioSource = GetComponent<AudioSource>();
+            if (deviceAudioSource == null)
+            {
+                deviceAudioSource = gameObject.AddComponent<AudioSource>();
+                deviceAudioSource.spatialBlend = 0f; // 2D sound for player
+            }
         }
-
-        // FIX #2: Check for existing playback source before creating
-        CreateOrFindPlaybackAudioSource();
+        
+        // Ensure UI exists
+        if (SoundWaveUI.Instance == null)
+        {
+            GameObject uiObj = new GameObject("SoundWaveUI_Manager");
+            uiObj.AddComponent<SoundWaveUI>();
+        }
+        
+        if (generateDynamicLights)
+        {
+            GenerateDynamicLights();
+        }
+        
+        // Initial state
+        if (deviceModel != null)
+        {
+            deviceModel.SetActive(hasDevice);
+        }
     }
-    // FIX #2: Check for existing playback child before creating new one
-    private void CreateOrFindPlaybackAudioSource()
+    
+    void GenerateDynamicLights()
     {
-        // Check if PlaybackAudio child already exists
-        Transform existingChild = transform.Find("PlaybackAudio");
-        if (existingChild != null)
-        {
-            playbackAudioSource = existingChild.GetComponent<AudioSource>();
-            distortionFilter = existingChild.GetComponent<PlaybackDistortionFilter>();
-            if (distortionFilter != null) distortionFilter.recorderDevice = this;
-            return;
-        }
-
-        // Create new playback audio source
-        GameObject playbackObj = new GameObject("PlaybackAudio");
-        playbackObj.transform.SetParent(transform);
-        playbackObj.transform.localPosition = Vector3.zero;
-
-        playbackAudioSource = playbackObj.AddComponent<AudioSource>();
-        playbackAudioSource.playOnAwake = false;
-        playbackAudioSource.spatialBlend = 1f;
-        playbackAudioSource.loop = false; // FIX #6: No loop, play once
-        playbackAudioSource.volume = 0.8f;
-        playbackAudioSource.minDistance = 1f;
-        playbackAudioSource.maxDistance = 10f;
-
-        distortionFilter = playbackObj.AddComponent<PlaybackDistortionFilter>();
-        distortionFilter.recorderDevice = this;
+        if (deviceModel == null) return;
+        
+        // Create small point lights logic (simplified for brevity, ensuring it attaches to model)
+        GameObject lightsRoot = new GameObject("DeviceLights");
+        lightsRoot.transform.SetParent(deviceModel.transform);
+        lightsRoot.transform.localPosition = Vector3.zero;
+        lightsRoot.transform.localRotation = Quaternion.identity;
+        
+        // Main Indicator Light
+        CreateLight(lightsRoot, new Vector3(0, 0.05f, 0.05f), 0.2f, 1.5f);
+    }
+    
+    void CreateLight(GameObject parent, Vector3 localPos, float range, float intensity)
+    {
+        GameObject lightObj = new GameObject("LedLight");
+        lightObj.transform.SetParent(parent.transform, false);
+        lightObj.transform.localPosition = localPos;
+        
+        Light l = lightObj.AddComponent<Light>();
+        l.type = LightType.Point;
+        l.range = range;
+        l.intensity = intensity;
+        l.color = Color.red; 
+        l.renderMode = LightRenderMode.ForcePixel;
+        
+        // Visual orb
+        GameObject orb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        orb.transform.SetParent(lightObj.transform, false);
+        orb.transform.localScale = Vector3.one * 0.02f;
+        Destroy(orb.GetComponent<Collider>());
+        
+        Renderer r = orb.GetComponent<Renderer>();
+        r.material = new Material(Shader.Find("Standard"));
+        r.material.EnableKeyword("_EMISSION");
+        r.material.SetColor("_EmissionColor", Color.red);
+        
+        indicatorRenderers.Add(r);
     }
 
     void Update()
     {
-        if (!isHeld) return;
+        if (!hasDevice) return;
+        
+        // Only allow inputs if cursor is locked
+        if (Cursor.lockState != CursorLockMode.Locked) return;
 
-        // === BATTERY DRAIN ===
-        if (!batteryDead)
+        HandleActivationInput();
+        HandleDropInput();
+
+        if (isActive)
         {
-            float drain = GetCurrentDrainRate();
-            currentBattery -= drain * Time.deltaTime;
-            currentBattery = Mathf.Max(0f, currentBattery);
-
-            // FIX #12: Battery low warnings
-            CheckBatteryWarnings();
-
-            if (currentBattery <= 0f)
+            HandleFrequencyInput();
+            HandleResonanceReset();
+        }
+    }
+    
+    void HandleActivationInput()
+    {
+        if (Input.GetKeyDown(activationKey))
+        {
+            isActive = !isActive;
+            Debug.Log($"[SoundRecorder] Activation toggled: {isActive}");
+            
+            if (activationSound != null && deviceAudioSource != null)
             {
-                HandleBatteryDeath();
-                return;
+                deviceAudioSource.PlayOneShot(activationSound);
             }
-        }
-        else
-        {
-            return;
-        }
-
-        // === MODE SWITCHING (F key) ===
-        bool resonanceUIOpen = ResonanceUI.Instance != null && ResonanceUI.Instance.IsOpen;
-        if (Input.GetKeyDown(KeyCode.F) && !resonanceUIOpen)
-        {
-            CycleMode();
-        }
-
-        // === MODE-SPECIFIC UPDATE ===
-        switch (currentMode)
-        {
-            case DeviceMode.FrequencyTuner:
-                UpdateFrequencyTuner(resonanceUIOpen);
-                break;
-            case DeviceMode.Recorder:
-                UpdateRecorder();
-                break;
-            case DeviceMode.Playback:
-                UpdatePlayback();
-                break;
-        }
-
-        // Smooth noise transition
-        currentNoiseAmount = Mathf.Lerp(currentNoiseAmount, targetNoiseAmount, Time.deltaTime * 8f);
-
-        // Update device light
-        UpdateDeviceLight();
-    }
-
-    // ==========================================
-    // BATTERY WARNINGS (FIX #12)
-    // ==========================================
-
-    private void CheckBatteryWarnings()
-    {
-        float batteryPercent = currentBattery / maxBattery;
-
-        if (!batteryWarning20 && batteryPercent <= 0.2f && batteryPercent > 0.1f)
-        {
-            batteryWarning20 = true;
-            if (InteractionUI.Instance != null)
-                InteractionUI.Instance.ShowMessage("[Dusuk Pil] %20 - Cihaz yakinda kapanacak!", 3f);
-        }
-        else if (!batteryWarning10 && batteryPercent <= 0.1f)
-        {
-            batteryWarning10 = true;
-            if (InteractionUI.Instance != null)
-                InteractionUI.Instance.ShowMessage("[Kritik Pil] %10 - Pil neredeyse bitti!", 3f);
-        }
-    }
-
-    // ==========================================
-    // MODE CYCLING
-    // ==========================================
-
-    private void CycleMode()
-    {
-        if (currentMode == DeviceMode.Recorder && recordingState != RecordingState.Idle)
-            CancelRecording();
-        if (currentMode == DeviceMode.Playback && isPlayingClip)
-            StopClipPlayback();
-
-        switch (currentMode)
-        {
-            case DeviceMode.FrequencyTuner:
-                currentMode = DeviceMode.Recorder;
-                if (audioSource.isPlaying) audioSource.Stop();
-                break;
-            case DeviceMode.Recorder:
-                currentMode = DeviceMode.Playback;
-                break;
-            case DeviceMode.Playback:
-                currentMode = DeviceMode.FrequencyTuner;
-                if (!audioSource.isPlaying) audioSource.Play();
-                break;
-        }
-
-        string modeName = GetModeDisplayName(currentMode);
-        if (InteractionUI.Instance != null)
-            InteractionUI.Instance.ShowMessage("Mod: " + modeName, 1.5f);
-
-        OnModeChanged?.Invoke(currentMode);
-#if UNITY_EDITOR
-        Debug.Log("[SoundRecorderDevice] Mode changed to: " + currentMode);
-#endif
-    }
-
-    private string GetModeDisplayName(DeviceMode mode)
-    {
-        switch (mode)
-        {
-            case DeviceMode.FrequencyTuner: return "FREKANS AYARLAYICI";
-            case DeviceMode.Recorder: return "SES KAYIT";
-            case DeviceMode.Playback: return "OYNATMA";
-            default: return "?";
-        }
-    }
-
-    // ==========================================
-    // FREQUENCY TUNER MODE (EXISTING)
-    // ==========================================
-
-    private void UpdateFrequencyTuner(bool uiHandling)
-    {
-        if (!uiHandling)
-        {
-            float scroll = Input.GetAxis("Mouse ScrollWheel");
-            if (Mathf.Abs(scroll) > 0.01f)
+            
+            if (SoundWaveUI.Instance != null)
             {
-                currentFrequency += scroll * scrollSensitivity * 100f;
-                currentFrequency = Mathf.Clamp(currentFrequency, minFrequency, maxFrequency);
-            }
-        }
-
-        float stabilizeFactor = 1f - (resonanceQuality * driftStabilization);
-        float drift = (Mathf.PerlinNoise(Time.time * driftSpeed, driftSeed) - 0.5f) * 2f;
-        drift *= driftAmount * stabilizeFactor * Time.deltaTime;
-        currentFrequency += drift;
-        currentFrequency = Mathf.Clamp(currentFrequency, minFrequency, maxFrequency);
-
-        if (!audioSource.isPlaying) audioSource.Play();
-    }
-
-    // ==========================================
-    // RECORDER MODE
-    // ==========================================
-
-    private void UpdateRecorder()
-    {
-        if (scanCooldown > 0f)
-            scanCooldown -= Time.deltaTime;
-
-        switch (recordingState)
-        {
-            case RecordingState.Idle:
-                if (Input.GetMouseButtonDown(0) && scanCooldown <= 0f)
-                    TryStartRecording();
-                break;
-
-            case RecordingState.Scanning:
-                recordingProgress += Time.deltaTime / 0.5f;
-                if (recordingProgress >= 1f)
+                if (isActive) 
                 {
-                    if (currentRecordingTarget != null && currentRecordingTarget.CanRecord)
-                    {
-                        StartRecording();
-                    }
-                    else
-                    {
-                        recordingState = RecordingState.Idle;
-                        recordingProgress = 0f;
-                        currentRecordingTarget = null;
-                        scanCooldown = 0.5f;
-
-                        if (InteractionUI.Instance != null)
-                            InteractionUI.Instance.ShowMessage("Kaydedilebilir ses bulunamadi!", 2f);
-
-                        OnRecordingStateChanged?.Invoke(RecordingState.Idle, 0f);
-                    }
+                     // Show UI if we are in a resonance area, or just show "Ready"
+                     if (isResonating) SoundWaveUI.Instance.Show();
                 }
-                else
+                else 
                 {
-                    OnRecordingStateChanged?.Invoke(RecordingState.Scanning, recordingProgress);
-                }
-                break;
-
-            case RecordingState.Recording:
-                UpdateRecordingProgress();
-                break;
-
-            case RecordingState.Done:
-                recordingProgress -= Time.deltaTime * 2f;
-                if (recordingProgress <= 0f)
-                {
-                    recordingState = RecordingState.Idle;
-                    recordingProgress = 0f;
-                    OnRecordingStateChanged?.Invoke(RecordingState.Idle, 0f);
-                }
-                break;
-        }
-
-        if (Input.GetMouseButtonDown(1) && recordingState != RecordingState.Idle)
-            CancelRecording();
-    }
-    private void TryStartRecording()
-    {
-        int emptySlot = FindEmptyClipSlot();
-        if (emptySlot < 0)
-        {
-            if (InteractionUI.Instance != null)
-                InteractionUI.Instance.ShowMessage("Tum kayit slotlari dolu! (Max 4)", 2f);
-            return;
-        }
-
-        recordingState = RecordingState.Scanning;
-        recordingProgress = 0f;
-
-        Collider[] hitColliders = Physics.OverlapSphere(transform.position, scanRadius);
-        GhostAudioSource bestTarget = null;
-        float closestDist = float.MaxValue;
-
-        foreach (Collider col in hitColliders)
-        {
-            if (!col.CompareTag("GhostSound")) continue;
-
-            GhostAudioSource ghostSource = col.GetComponent<GhostAudioSource>();
-            if (ghostSource == null)
-                ghostSource = col.GetComponentInParent<GhostAudioSource>();
-
-            if (ghostSource != null && ghostSource.CanRecord)
-            {
-                float dist = Vector3.Distance(transform.position, ghostSource.transform.position);
-                if (dist < closestDist)
-                {
-                    closestDist = dist;
-                    bestTarget = ghostSource;
+                    SoundWaveUI.Instance.Hide();
                 }
             }
         }
-
-        currentRecordingTarget = bestTarget;
-
-        if (bestTarget != null)
-        {
-#if UNITY_EDITOR
-            Debug.Log("[SoundRecorderDevice] Scanning... Found target: '" + bestTarget.clipID + "' at distance " + closestDist.ToString("F1") + "m");
-#endif
-            if (InteractionUI.Instance != null)
-                InteractionUI.Instance.ShowMessage("Ses algilandi: " + bestTarget.clipDisplayName, 1f);
-        }
-#if UNITY_EDITOR
-        else
-        {
-            Debug.Log("[SoundRecorderDevice] Scanning... No GhostSound targets in range.");
-        }
-#endif
-
-        OnRecordingStateChanged?.Invoke(RecordingState.Scanning, 0f);
     }
 
-    private void StartRecording()
+    void HandleFrequencyInput()
     {
-        recordingState = RecordingState.Recording;
-        recordingProgress = 0f;
-
-        currentRecordingTarget.OnRecordingStart();
-
-        if (InteractionUI.Instance != null)
-            InteractionUI.Instance.ShowMessage("Kaydediliyor: " + currentRecordingTarget.clipDisplayName + "...", recordingDuration);
-
-        OnRecordingStateChanged?.Invoke(RecordingState.Recording, 0f);
-#if UNITY_EDITOR
-        Debug.Log("[SoundRecorderDevice] Recording started: '" + currentRecordingTarget.clipID + "'");
-#endif
-    }
-
-    private void UpdateRecordingProgress()
-    {
-        if (currentRecordingTarget == null)
+        float scroll = Input.GetAxis("Mouse ScrollWheel");
+        if (Mathf.Abs(scroll) > 0.01f)
         {
-            CancelRecording();
-            return;
-        }
-
-        float dist = Vector3.Distance(transform.position, currentRecordingTarget.transform.position);
-        if (dist > scanRadius * 1.2f)
-        {
-            CancelRecording();
-            if (InteractionUI.Instance != null)
-                InteractionUI.Instance.ShowMessage("Menzil disi! Kayit iptal.", 2f);
-            return;
-        }
-
-        recordingProgress += Time.deltaTime / recordingDuration;
-        OnRecordingStateChanged?.Invoke(RecordingState.Recording, recordingProgress);
-
-        if (recordingProgress >= 1f)
-            CompleteRecording();
-    }
-
-    private void CompleteRecording()
-    {
-        if (currentRecordingTarget == null) return;
-
-        RecordedClipData clipData = currentRecordingTarget.OnRecordingComplete();
-
-        int slot = FindEmptyClipSlot();
-        if (slot >= 0)
-        {
-            recordedClips[slot] = clipData;
-            selectedClipSlot = slot;
-
-#if UNITY_EDITOR
-            Debug.Log("[SoundRecorderDevice] Recording COMPLETE! '" + clipData.clipID + "' stored in slot " + (slot + 1));
-#endif
-
-            if (InteractionUI.Instance != null)
-                InteractionUI.Instance.ShowMessage("Ses kaydedildi: " + clipData.clipName + " [Slot " + (slot + 1) + "]", 3f);
-
-            if (InventorySystem.Instance != null)
+            float oldFrequency = currentFrequency;
+            currentFrequency += scroll * frequencyScrollSpeed;
+            currentFrequency = Mathf.Clamp(currentFrequency, minFrequency, maxFrequency);
+            
+            // Audio feedback
+            if (frequencyChangeSound != null && deviceAudioSource != null && Mathf.Abs(oldFrequency - currentFrequency) > 1f)
             {
-                InventorySystem.Instance.AddItem(
-                    "recorded_audio_" + clipData.clipID,
-                    "Kayit: " + clipData.clipName,
-                    InventorySystem.ItemType.Misc,
-                    "Kaydedilmis hayalet sesi. Slot " + (slot + 1) + "."
-                );
+                if (!deviceAudioSource.isPlaying)
+                {
+                    deviceAudioSource.pitch = Mathf.Lerp(0.8f, 1.2f, currentFrequency / 2000f);
+                    deviceAudioSource.PlayOneShot(frequencyChangeSound, 0.2f);
+                }
             }
-
-            OnClipRecorded?.Invoke(slot, clipData);
-        }
-
-        recordingState = RecordingState.Done;
-        recordingProgress = 1f;
-        currentRecordingTarget = null;
-        scanCooldown = 1f;
-
-        OnRecordingStateChanged?.Invoke(RecordingState.Done, 1f);
-    }
-
-    private void CancelRecording()
-    {
-        if (currentRecordingTarget != null)
-        {
-            currentRecordingTarget.OnRecordingCancelled();
-            currentRecordingTarget = null;
-        }
-
-        recordingState = RecordingState.Idle;
-        recordingProgress = 0f;
-        scanCooldown = 0.5f;
-
-        OnRecordingStateChanged?.Invoke(RecordingState.Idle, 0f);
-#if UNITY_EDITOR
-        Debug.Log("[SoundRecorderDevice] Recording cancelled.");
-#endif
-    }
-
-    private int FindEmptyClipSlot()
-    {
-        for (int i = 0; i < maxClipSlots; i++)
-        {
-            if (!recordedClips[i].hasClip) return i;
-        }
-        return -1;
-    }
-
-    // ==========================================
-    // PLAYBACK MODE
-    // ==========================================
-
-    private void UpdatePlayback()
-    {
-        if (Cursor.lockState == CursorLockMode.Locked)
-        {
-            if (Input.GetKeyDown(KeyCode.Alpha1)) SelectClipSlot(0);
-            if (Input.GetKeyDown(KeyCode.Alpha2)) SelectClipSlot(1);
-            if (Input.GetKeyDown(KeyCode.Alpha3)) SelectClipSlot(2);
-            if (Input.GetKeyDown(KeyCode.Alpha4)) SelectClipSlot(3);
-        }
-
-        if (Input.GetMouseButtonDown(0))
-        {
-            if (isPlayingClip)
-                StopClipPlayback();
-            else
-                PlaySelectedClip();
-        }
-
-        // FIX #6: Auto-stop detection works correctly now (loop=false)
-        if (isPlayingClip && playbackAudioSource != null && !playbackAudioSource.isPlaying)
-        {
-            isPlayingClip = false;
-            OnClipStopped?.Invoke();
-#if UNITY_EDITOR
-            Debug.Log("[SoundRecorderDevice] Playback finished naturally.");
-#endif
+            
+            // Update UI
+            if (SoundWaveUI.Instance != null && isResonating)
+            {
+                SoundWaveUI.Instance.UpdateFrequencies(currentTargetFrequency, currentFrequency);
+            }
         }
     }
 
-    private void SelectClipSlot(int slot)
+    public void EnterResonanceArea(float targetFreq)
     {
-        if (slot < 0 || slot >= maxClipSlots) return;
-
-        if (isPlayingClip)
-            StopClipPlayback();
-
-        selectedClipSlot = slot;
-
-        if (recordedClips[slot].hasClip)
+        currentTargetFrequency = targetFreq;
+        if (isActive && SoundWaveUI.Instance != null)
         {
-            if (InteractionUI.Instance != null)
-                InteractionUI.Instance.ShowMessage("Slot " + (slot + 1) + ": " + recordedClips[slot].clipName, 1.5f);
+            SoundWaveUI.Instance.Show();
+            SoundWaveUI.Instance.UpdateFrequencies(targetFreq, currentFrequency);
+        }
+    }
+    
+    public void ExitResonanceArea()
+    {
+        if (SoundWaveUI.Instance != null)
+        {
+            SoundWaveUI.Instance.Hide();
+        }
+        isResonating = false;
+        ResetVisuals();
+    }
+
+    void HandleResonanceReset()
+    {
+        if (isResonating)
+        {
+            resonanceResetTimer -= Time.deltaTime;
+            if (resonanceResetTimer <= 0)
+            {
+                isResonating = false;
+                ResetVisuals();
+            }
+        }
+    }
+
+    public void SetResonanceState(float matchFactor, bool inRange)
+    {
+        if (!hasDevice || !isActive) return;
+        
+        isResonating = inRange;
+        resonanceResetTimer = 0.2f; // Auto-reset
+        
+        Color emissionColor;
+        if (inRange)
+        {
+            emissionColor = Color.Lerp(Color.red, Color.green, matchFactor);
+            emissionColor *= 2f; 
         }
         else
         {
-            if (InteractionUI.Instance != null)
-                InteractionUI.Instance.ShowMessage("Slot " + (slot + 1) + ": [Bos]", 1f);
+            emissionColor = Color.black;
         }
 
-#if UNITY_EDITOR
-        Debug.Log("[SoundRecorderDevice] Selected slot " + (slot + 1));
-#endif
-    }
-
-    private void PlaySelectedClip()
-    {
-        if (selectedClipSlot < 0 || selectedClipSlot >= maxClipSlots) return;
-
-        RecordedClipData clip = recordedClips[selectedClipSlot];
-        if (!clip.hasClip || clip.audioClip == null)
+        foreach (Renderer r in indicatorRenderers)
         {
-            if (InteractionUI.Instance != null)
-                InteractionUI.Instance.ShowMessage("Bu slotta kayit yok!", 1.5f);
-            return;
-        }
-
-        playbackAudioSource.clip = clip.audioClip;
-        playbackAudioSource.loop = true; // Loop until manually stopped or door unlocks
-        playbackAudioSource.Play();
-        isPlayingClip = true;
-        playbackPhase = 0f;
-        playbackWobblePhase = 0f;
-
-        OnClipPlayed?.Invoke(clip.clipID, transform.position);
-
-        if (InteractionUI.Instance != null)
-            InteractionUI.Instance.ShowMessage("Calinyor: " + clip.clipName + " [Sol Tik = Durdur]", 2f);
-
-#if UNITY_EDITOR
-        Debug.Log("[SoundRecorderDevice] Playing clip '" + clip.clipID + "' from slot " + (selectedClipSlot + 1));
-#endif
-    }
-
-    public void StopClipPlayback()
-    {
-        if (playbackAudioSource != null && playbackAudioSource.isPlaying)
-            playbackAudioSource.Stop();
-
-        isPlayingClip = false;
-        OnClipStopped?.Invoke();
-#if UNITY_EDITOR
-        Debug.Log("[SoundRecorderDevice] Playback stopped.");
-#endif
-    }
-    // ==========================================
-    // BATTERY MANAGEMENT
-    // ==========================================
-
-    private float GetCurrentDrainRate()
-    {
-        bool uiOpen = ResonanceUI.Instance != null && ResonanceUI.Instance.IsOpen;
-
-        switch (currentMode)
-        {
-            case DeviceMode.FrequencyTuner:
-                return uiOpen ? batteryDrainRate : batteryIdleDrain;
-            case DeviceMode.Recorder:
-                return recordingState == RecordingState.Recording ? batteryRecordDrain :
-                       recordingState == RecordingState.Scanning ? batteryRecordDrain * 0.5f :
-                       batteryIdleDrain;
-            case DeviceMode.Playback:
-                return isPlayingClip ? batteryPlaybackDrain : batteryIdleDrain;
-            default:
-                return batteryIdleDrain;
-        }
-    }
-
-    private void HandleBatteryDeath()
-    {
-        batteryDead = true;
-#if UNITY_EDITOR
-        Debug.Log("[SoundRecorderDevice] BATTERY DEAD!");
-#endif
-
-        if (recordingState != RecordingState.Idle)
-            CancelRecording();
-        if (isPlayingClip)
-            StopClipPlayback();
-        if (ResonanceUI.Instance != null && ResonanceUI.Instance.IsOpen)
-            ResonanceUI.Instance.CloseInteraction();
-        if (InteractionUI.Instance != null)
-            InteractionUI.Instance.ShowMessage("[Pil Bitti] Cihaz kapaniyor...", 3f);
-        if (audioSource != null && audioSource.isPlaying)
-            audioSource.Stop();
-        if (deviceLight != null)
-            deviceLight.enabled = false;
-    }
-
-    // ==========================================
-    // PROCEDURAL AUDIO (FREQUENCY TUNER ONLY)
-    // ==========================================
-
-    void OnAudioFilterRead(float[] data, int channels)
-    {
-        if (!isHeld || audioSource == null) return;
-        if (currentMode != DeviceMode.FrequencyTuner) return;
-        if (random == null) return; // Guard: audio thread may fire before Awake
-
-        double gain = volume;
-        double increment = currentFrequency * 2.0 * Mathf.PI / sampling_frequency;
-
-        for (int i = 0; i < data.Length; i += channels)
-        {
-            phase += increment;
-            if (phase > 2.0 * Mathf.PI) phase -= 2.0 * Mathf.PI;
-
-            float signal = (float)(gain * Mathf.Sin((float)phase));
-            float noise = (float)(random.NextDouble() * 2.0 - 1.0) * currentNoiseAmount;
-            signal += noise;
-
-            for (int j = 0; j < channels; j++)
+            if (r != null && r.material != null)
             {
-                data[i + j] = signal;
-            }
-        }
-    }
-
-    // ==========================================
-    // PLAYBACK DISTORTION (Aura Touch)
-    // Called by PlaybackDistortionFilter on playback AudioSource
-    // ==========================================
-
-    public void ApplyPlaybackDistortion(float[] data, int channels)
-    {
-        if (!isPlayingClip) return;
-        if (random == null) return; // Guard for audio thread safety
-
-        float sampleRate = (float)sampling_frequency;
-
-        for (int i = 0; i < data.Length; i += channels)
-        {
-            float sample = data[i];
-
-            // 1. PITCH WOBBLE
-            playbackWobblePhase += 0.0001f;
-            float wobble = Mathf.Sin(playbackWobblePhase * 7f) * pitchWobbleAmount;
-            sample *= (1f + wobble);
-
-            // 2. BIT CRUSH
-            float crushStep = 1f / Mathf.Pow(2, bitCrushDepth);
-            sample = Mathf.Round(sample / crushStep) * crushStep;
-
-            // 3. RING MODULATION
-            playbackPhase += ringModFrequency / sampleRate;
-            if (playbackPhase > 1f) playbackPhase -= 1f;
-            float ringMod = Mathf.Sin(playbackPhase * Mathf.PI * 2f);
-            sample = sample * 0.7f + sample * ringMod * 0.3f;
-
-            // 4. NOISE OVERLAY
-            if (random.NextDouble() < playbackNoiseAmount * 0.5f)
-            {
-                float noiseVal = (float)(random.NextDouble() * 2.0 - 1.0) * playbackNoiseAmount;
-                sample += noiseVal;
-            }
-
-            sample = Mathf.Clamp(sample, -0.95f, 0.95f);
-
-            for (int j = 0; j < channels; j++)
-            {
-                data[i + j] = sample;
-            }
-        }
-    }
-
-    // ==========================================
-    // RESONANCE INTERFACE (existing)
-    // ==========================================
-
-    public void SetResonance(float quality)
-    {
-        resonanceQuality = Mathf.Clamp01(quality);
-        targetNoiseAmount = Mathf.Lerp(baseNoiseAmount, 0.02f, resonanceQuality);
-    }
-
-    // ==========================================
-    // DEVICE LIGHT
-    // ==========================================
-
-    private void UpdateDeviceLight()
-    {
-        if (deviceLight == null) return;
-
-        Color targetColor;
-
-        switch (currentMode)
-        {
-            case DeviceMode.FrequencyTuner:
-                if (resonanceQuality < 0.5f)
-                    targetColor = Color.Lerp(Color.red, Color.yellow, resonanceQuality * 2f);
+                if (inRange)
+                {
+                    r.material.EnableKeyword("_EMISSION");
+                    r.material.SetColor("_EmissionColor", emissionColor);
+                }
                 else
-                    targetColor = Color.Lerp(Color.yellow, Color.green, (resonanceQuality - 0.5f) * 2f);
-                break;
-
-            case DeviceMode.Recorder:
-                if (recordingState == RecordingState.Recording)
-                    targetColor = Color.Lerp(Color.red, new Color(1f, 0.3f, 0f),
-                        Mathf.Sin(Time.time * 8f) * 0.5f + 0.5f);
-                else if (recordingState == RecordingState.Scanning)
-                    targetColor = new Color(0.3f, 0.3f, 1f);
-                else
-                    targetColor = new Color(0.6f, 0.2f, 0.8f);
-                break;
-
-            case DeviceMode.Playback:
-                if (isPlayingClip)
-                    targetColor = Color.Lerp(Color.cyan, Color.green,
-                        Mathf.Sin(Time.time * 4f) * 0.5f + 0.5f);
-                else
-                    targetColor = Color.cyan;
-                break;
-
-            default:
-                targetColor = Color.red;
-                break;
+                {
+                    r.material.DisableKeyword("_EMISSION");
+                    r.material.SetColor("_EmissionColor", Color.black);
+                }
+                
+                Light l = r.GetComponentInParent<Light>();
+                if (l != null) l.color = inRange ? emissionColor : Color.black;
+            }
         }
-
-        deviceLight.color = Color.Lerp(deviceLight.color, targetColor, Time.deltaTime * 5f);
-
-        float activityLevel = 0f;
-        if (currentMode == DeviceMode.FrequencyTuner)
-            activityLevel = resonanceQuality;
-        else if (currentMode == DeviceMode.Recorder && recordingState == RecordingState.Recording)
-            activityLevel = recordingProgress;
-        else if (currentMode == DeviceMode.Playback && isPlayingClip)
-            activityLevel = 0.8f;
-
-        float pulse = 1f + Mathf.Sin(Time.time * 10f * Mathf.Max(activityLevel, 0.2f)) * 0.2f * activityLevel;
-        deviceLight.intensity = lightIntensity * pulse;
+    }
+    
+    private void ResetVisuals()
+    {
+        foreach (Renderer r in indicatorRenderers)
+        {
+            if (r != null && r.material != null)
+            {
+                r.material.DisableKeyword("_EMISSION");
+                r.material.SetColor("_EmissionColor", Color.black);
+            }
+        }
     }
 
-    // ==========================================
-    // DEVICE STATE MANAGEMENT
-    // ==========================================
+    // --- Dropping Logic ---
 
-    public void SetDeviceState(bool active)
+    void HandleDropInput()
     {
-        isHeld = active;
-        if (active)
+        if (Input.GetKeyDown(dropKey))
         {
-            if (currentMode == DeviceMode.FrequencyTuner)
-            {
-                if (audioSource && !audioSource.isPlaying) audioSource.Play();
-            }
-            if (deviceLight != null) deviceLight.enabled = true;
+            DropDevice();
+        }
+    }
+
+    public void DropDevice()
+    {
+        if (!hasDevice) return;
+        
+        hasDevice = false;
+        isActive = false; // Turn off when dropped
+        if (SoundWaveUI.Instance != null) SoundWaveUI.Instance.Hide();
+
+        Vector3 dropPos = CalculateDropPosition();
+        
+        GameObject droppedItem = null;
+        if (originalSceneObject != null)
+        {
+            originalSceneObject.SetActive(true);
+            originalSceneObject.transform.position = dropPos;
+            originalSceneObject.transform.rotation = Quaternion.identity;
+            droppedItem = originalSceneObject;
+        }
+        else if (pickupPrefab != null)
+        {
+            droppedItem = Instantiate(pickupPrefab, dropPos, Quaternion.identity);
         }
         else
         {
-            if (audioSource) audioSource.Stop();
-            if (deviceLight != null) deviceLight.enabled = false;
-            if (isPlayingClip) StopClipPlayback();
-            if (recordingState != RecordingState.Idle) CancelRecording();
-            resonanceQuality = 0f;
-            currentNoiseAmount = baseNoiseAmount;
-            targetNoiseAmount = baseNoiseAmount;
+            droppedItem = CreateDroppedPlaceholder(dropPos);
         }
-    }
 
-    public void Pickup()
-    {
-        Instance = this;
-        SetDeviceState(true);
-
-        if (deviceLight == null)
-            CreateDeviceLight();
-
-        // Reset battery warnings on pickup
-        batteryWarning20 = false;
-        batteryWarning10 = false;
-    }
-
-    private void CreateDeviceLight()
-    {
-        deviceLight = GetComponentInChildren<Light>();
-
-        if (deviceLight == null)
+        if (droppedItem != null)
         {
-            GameObject lightObj = new GameObject("DeviceLight");
-            lightObj.transform.SetParent(transform);
-            lightObj.transform.localPosition = new Vector3(0, 0.05f, 0.1f);
-
-            deviceLight = lightObj.AddComponent<Light>();
-            deviceLight.type = LightType.Point;
-            deviceLight.range = lightRange;
-            deviceLight.intensity = lightIntensity;
-            deviceLight.color = Color.red;
-            deviceLight.shadows = LightShadows.None;
+            SetupDroppedPhysics(droppedItem);
         }
 
-        deviceLight.enabled = true;
-#if UNITY_EDITOR
-        Debug.Log("[SoundRecorderDevice] Device light created/found.");
-#endif
-    }
-
-    // ==========================================
-    // CLEANUP (FIX #11)
-    // ==========================================
-
-    void OnDisable()
-    {
-        if (isPlayingClip)
-            StopClipPlayback();
-        if (recordingState != RecordingState.Idle)
-            CancelRecording();
-    }
-
-    void OnDestroy()
-    {
-        // Clean up singleton reference
-        if (Instance == this)
-            Instance = null;
-
-        // Destroy playback child if it exists
-        Transform playbackChild = transform.Find("PlaybackAudio");
-        if (playbackChild != null)
-            Destroy(playbackChild.gameObject);
-    }
-
-    // ==========================================
-    // PUBLIC PROPERTIES
-    // ==========================================
-
-    public bool HasDevice { get { return true; } }
-    public bool IsActive { get { return isHeld; } }
-    public float CurrentFrequency { get { return currentFrequency; } }
-    public float ResonanceQuality { get { return resonanceQuality; } }
-    public float BatteryNormalized { get { return currentBattery / maxBattery; } }
-    public bool IsBatteryDead { get { return batteryDead; } }
-    public DeviceMode CurrentMode { get { return currentMode; } }
-    public RecordingState CurrentRecordingState { get { return recordingState; } }
-    public float RecordingProgress { get { return recordingProgress; } }
-    public int SelectedClipSlot { get { return selectedClipSlot; } }
-    public bool IsPlayingClip { get { return isPlayingClip; } }
-
-    public RecordedClipData GetClipAtSlot(int slot)
-    {
-        if (slot < 0 || slot >= maxClipSlots)
-            return new RecordedClipData { hasClip = false };
-        return recordedClips[slot];
-    }
-
-    public string GetPlayingClipID()
-    {
-        if (!isPlayingClip || selectedClipSlot < 0 || selectedClipSlot >= maxClipSlots)
-            return null;
-        return recordedClips[selectedClipSlot].hasClip ? recordedClips[selectedClipSlot].clipID : null;
-    }
-
-    public int GetRecordedClipCount()
-    {
-        int count = 0;
-        for (int i = 0; i < maxClipSlots; i++)
+        // Cleanup model
+        if (deviceModel != null)
         {
-            if (recordedClips[i].hasClip) count++;
+            Destroy(deviceModel);
+            deviceModel = null;
         }
-        return count;
+        if (deviceHoldPosition != null)
+        {
+            Destroy(deviceHoldPosition.gameObject);
+            deviceHoldPosition = null;
+        }
+        
+        Debug.Log("[SoundRecorder] Device dropped.");
+        if (InteractionUI.Instance != null) InteractionUI.Instance.ShowPrompt("Ses Kayit Cihazi birakildi");
     }
 
-    public void RechargeBattery(float amount)
+    Vector3 CalculateDropPosition()
     {
-        currentBattery = Mathf.Min(currentBattery + amount, maxBattery);
-        if (batteryDead && currentBattery > 0f)
+        Vector3 origin = playerCamera != null ? playerCamera.transform.position : transform.position;
+        Vector3 forward = playerCamera != null ? playerCamera.transform.forward : transform.forward;
+        
+        Vector3 flatForward = new Vector3(forward.x, 0f, forward.z).normalized;
+        if (flatForward.magnitude < 0.01f) flatForward = transform.forward;
+        
+        Vector3 targetPos = origin + flatForward * dropForwardDistance;
+        
+        RaycastHit hit;
+        if (Physics.Raycast(targetPos + Vector3.up * 2f, Vector3.down, out hit, 10f))
         {
-            batteryDead = false;
-            batteryWarning20 = false;
-            batteryWarning10 = false;
-            if (currentMode == DeviceMode.FrequencyTuner && audioSource != null && !audioSource.isPlaying)
-                audioSource.Play();
-            if (deviceLight != null) deviceLight.enabled = true;
-#if UNITY_EDITOR
-            Debug.Log("[SoundRecorderDevice] Battery recharged! " + currentBattery.ToString("F0") + "%");
-#endif
+             return hit.point + Vector3.up * 0.15f;
         }
+        return transform.position + flatForward * 0.5f;
+    }
+    
+    void SetupDroppedPhysics(GameObject item)
+    {
+        Collider col = item.GetComponent<Collider>();
+        if (col == null) item.AddComponent<BoxCollider>();
+        
+        Rigidbody rb = item.GetComponent<Rigidbody>();
+        if (rb == null) rb = item.AddComponent<Rigidbody>();
+        
+        rb.isKinematic = false;
+        rb.useGravity = true;
+        rb.AddForce(transform.forward * dropTossForce, ForceMode.Impulse);
+    }
+    
+    GameObject CreateDroppedPlaceholder(Vector3 pos)
+    {
+        GameObject p = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        p.name = "SoundRecorder_Dropped";
+        p.transform.position = pos;
+        p.transform.localScale = new Vector3(0.1f, 0.15f, 0.05f);
+        p.GetComponent<Renderer>().material.color = Color.gray;
+        
+        // Add component to pick it up again
+        SoundRecorderPickupItem pickup = p.AddComponent<SoundRecorderPickupItem>();
+        // Note: We can't easily assign the original prefab back here if we don't have a reference to it.
+        // The PickupItem script usually needs a reference to the device prefab to equip it.
+        // For now, this is a fallback that might not work perfectly without a proper prefab assigned in inspector.
+        
+        return p;
+    }
+
+    // --- Equip Logic ---
+
+    public void EquipDevice(GameObject prefab)
+    {
+        hasDevice = true;
+        isActive = false; // Start off until Q is pressed
+        
+        // Cleanup old
+        if (deviceModel != null) Destroy(deviceModel);
+        if (deviceHoldPosition != null) Destroy(deviceHoldPosition.gameObject);
+        
+        // Create container
+        GameObject container = new GameObject("SoundRecorderContainer");
+        if (playerCamera != null) container.transform.SetParent(playerCamera.transform, false);
+        else container.transform.SetParent(transform, false);
+        
+        container.transform.localPosition = deviceHandOffset;
+        container.transform.localRotation = Quaternion.Euler(deviceHandRotation);
+        deviceHoldPosition = container.transform;
+        
+        // Instinctiate
+        if (prefab != null)
+        {
+            deviceModel = Instantiate(prefab, deviceHoldPosition);
+            deviceModel.transform.localPosition = Vector3.zero;
+            deviceModel.transform.localRotation = Quaternion.identity;
+            deviceModel.transform.localScale = deviceHandScale;
+        }
+        else
+        {
+            deviceModel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            deviceModel.transform.SetParent(deviceHoldPosition, false);
+            deviceModel.transform.localScale = new Vector3(0.05f, 0.1f, 0.02f);
+        }
+        
+        // Setup renderers again
+        indicatorRenderers.Clear();
+        indicatorRenderers.AddRange(deviceModel.GetComponentsInChildren<Renderer>());
+        if (generateDynamicLights) GenerateDynamicLights();
+
+        Debug.Log("[SoundRecorder] Device equipped.");
+        if (InteractionUI.Instance != null) InteractionUI.Instance.ShowPrompt("Sound Recorder Alindi! [Q] Ac/Kapa [G] Birak");
+    }
+    
+    public void SetOriginalSceneObject(GameObject obj)
+    {
+        originalSceneObject = obj;
     }
 }

@@ -6,7 +6,6 @@ TagManager:
   tags:
   - CinemachineTarget
   - Echo
-  - GhostSound
   layers:
   - Default
   - TransparentFX

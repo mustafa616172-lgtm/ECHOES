@@ -1,415 +1,247 @@
 using UnityEngine;
 using System.Collections;
 
-[RequireComponent(typeof(AudioSource))]
-public class ResonanceDoor : MonoBehaviour, IInteractable
+/// <summary>
+/// ECHOES - Resonance Door/Lock Mechanic
+/// A lock that requires a specific sound frequency to open.
+/// Generates its own procedural audio (Sine Wave + Static).
+/// </summary>
+public class ResonanceDoor : MonoBehaviour
 {
-    [Header("Puzzle Settings")]
-    public float requiredFrequency = 440f;
-    public float tolerance = 15f;
-    public float detectionRange = 8f;
-    public float unlockDuration = 2.0f;
-
-    [Header("Visual Feedback")]
-    public float vibrationIntensity = 0.03f;
-    public Transform doorModel;
+    [Header("Resonance Settings")]
+    [Tooltip("The frequency required to open this lock (Hz)")]
+    public float requiredFrequency = 440.0f;
     
-    [Header("Audio")]
-    public AudioClip resonanceHum;
+    [Tooltip("Acceptable error range (Hz)")]
+    public float tolerance = 15.0f;
+    
+    [Tooltip("Distance at which the player can interact/hear the mechanics")]
+    public float interactionRange = 6.0f;
+    
+    [Tooltip("Time required to hold the correct frequency to unlock")]
+    public float unlockTime = 1.0f;
 
-    // State
+    [Header("Audio Settings")]
+    [Range(0f, 1f)] public float masterVolume = 0.5f;
+    
+    private SoundRecorderDevice playerDevice;
+    private AudioSource sineSource;
+    private AudioSource staticSource;
+    
+    private float holdTimer = 0f;
     private bool isUnlocked = false;
-    private bool isInteracting = false;
-    private float matchTimer = 0f;
-    private float currentQuality = 0f;
-    private Vector3 originalPosition;
-    private AudioSource doorAudio;
-    private ResonanceDoorEffects doorEffects;
-
+    private Material doorMaterial;
+    private Vector3 originalLocalPosition;
+    
     void Start()
     {
-        if (doorModel == null) doorModel = transform;
-        originalPosition = doorModel.localPosition;
+        playerDevice = FindObjectOfType<SoundRecorderDevice>();
+        originalLocalPosition = transform.localPosition;
         
-        doorAudio = GetComponent<AudioSource>();
-        if (doorAudio != null)
-        {
-            doorAudio.loop = true;
-            doorAudio.playOnAwake = false;
-            doorAudio.spatialBlend = 1f;
-            doorAudio.volume = 0f;
-            
-            if (resonanceHum != null)
-                doorAudio.clip = resonanceHum;
-        }
+        SetupAudioSources();
         
-        // Remove competing IInteractable components so InteractionController finds US
-        RemoveCompetingInteractables();
-        
-        // Ensure collider exists for raycast detection
-        if (GetComponent<Collider>() == null)
-        {
-            BoxCollider col = gameObject.AddComponent<BoxCollider>();
-            col.isTrigger = false;
-            Debug.Log("[ResonanceDoor] Auto-added BoxCollider.");
-        }
-
-        // Auto-find ResonanceUI if not available
-        if (ResonanceUI.Instance == null)
-        {
-            ResonanceUI foundUI = FindObjectOfType<ResonanceUI>(true);
-            if (foundUI != null)
-            {
-                ResonanceUI.Instance = foundUI;
-                Debug.Log("[ResonanceDoor] Found ResonanceUI and assigned Instance.");
-            }
-            else
-            {
-                Debug.LogWarning("[ResonanceDoor] NO ResonanceUI in scene! Run Tools > ECHOES > Setup Resonance UI");
-            }
-        }
-        
-        Debug.Log("[ResonanceDoor] Init on '" + gameObject.name + "'. Freq=" + requiredFrequency + "Hz, UI=" + (ResonanceUI.Instance != null));
-
-        // Auto-attach effects companion
-        doorEffects = GetComponent<ResonanceDoorEffects>();
-        if (doorEffects == null)
-            doorEffects = gameObject.AddComponent<ResonanceDoorEffects>();
-
-        // Auto-create screen effects singleton if not in scene
-        if (ResonanceScreenEffects.Instance == null)
-        {
-            Camera cam = Camera.main;
-            if (cam != null)
-            {
-                var screenFx = cam.gameObject.AddComponent<ResonanceScreenEffects>();
-                Debug.Log("[ResonanceDoor] Auto-added ResonanceScreenEffects to main camera.");
-            }
-        }
+        // Optional: Cache material for visual feedback on the door itself (e.g. vibration)
+        Renderer r = GetComponent<Renderer>();
+        if (r != null) doorMaterial = r.material;
     }
 
-    private void RemoveCompetingInteractables()
+    void SetupAudioSources()
     {
-        // Use DestroyImmediate so they're gone THIS frame
-        // Check SpeakerDoorLink FIRST - it depends on DoorInteractable
-        var speakerLinks = GetComponents<SpeakerDoorLink>();
-        foreach (var s in speakerLinks)
-        {
-            Debug.Log($"[ResonanceDoor] Removing SpeakerDoorLink from '{gameObject.name}'");
-            DestroyImmediate(s);
-        }
-        
-        var controllers = GetComponents<DoorController>();
-        foreach (var c in controllers)
-        {
-            Debug.Log($"[ResonanceDoor] Removing DoorController from '{gameObject.name}'");
-            DestroyImmediate(c);
-        }
-        
-        var doorInteractables = GetComponents<DoorInteractable>();
-        foreach (var d in doorInteractables)
-        {
-            Debug.Log($"[ResonanceDoor] Removing DoorInteractable from '{gameObject.name}'");
-            DestroyImmediate(d);
-        }
+        // 1. Sine Wave Source
+        GameObject sineObj = new GameObject("SineSource");
+        sineObj.transform.SetParent(transform);
+        sineObj.transform.localPosition = Vector3.zero;
+        sineSource = sineObj.AddComponent<AudioSource>();
+        sineSource.clip = GenerateSineWave(requiredFrequency);
+        sineSource.loop = true;
+        sineSource.spatialBlend = 1.0f; // 3D Sound
+        sineSource.minDistance = 1f;
+        sineSource.maxDistance = interactionRange;
+        sineSource.rolloffMode = AudioRolloffMode.Linear;
+        sineSource.volume = 0f;
+        sineSource.Play();
 
-        // Also check children
-        var childControllers = GetComponentsInChildren<DoorController>();
-        foreach (var c in childControllers)
-        {
-            Debug.Log($"[ResonanceDoor] Removing child DoorController from '{c.gameObject.name}'");
-            DestroyImmediate(c);
-        }
-        
-        var childDoorInteractables = GetComponentsInChildren<DoorInteractable>();
-        foreach (var d in childDoorInteractables)
-        {
-            Debug.Log($"[ResonanceDoor] Removing child DoorInteractable from '{d.gameObject.name}'");
-            DestroyImmediate(d);
-        }
+        // 2. Static Noise Source
+        GameObject staticObj = new GameObject("StaticSource");
+        staticObj.transform.SetParent(transform);
+        staticObj.transform.localPosition = Vector3.zero;
+        staticSource = staticObj.AddComponent<AudioSource>();
+        staticSource.clip = GenerateStaticNoise();
+        staticSource.loop = true;
+        staticSource.spatialBlend = 1.0f;
+        staticSource.minDistance = 1f;
+        staticSource.maxDistance = interactionRange;
+        staticSource.rolloffMode = AudioRolloffMode.Linear;
+        staticSource.volume = 0f;
+        staticSource.Play();
     }
-
-    // ==========================================
-    // IInteractable
-    // ==========================================
-
-    public string GetInteractionPrompt()
-    {
-        if (isUnlocked) return "";
-        
-        if (SoundRecorderDevice.Instance == null || !SoundRecorderDevice.Instance.IsActive)
-            return "[E] Locked (Device Required)";
-        
-        if (isInteracting)
-            return "[E] Stop Tuning";
-        
-        return "[E] Tune Frequency";
-    }
-
-    public void Interact()
-    {
-        Debug.Log($"[ResonanceDoor] Interact()! unlocked={isUnlocked}, interacting={isInteracting}");
-        
-        if (isUnlocked) return;
-
-        if (SoundRecorderDevice.Instance == null || !SoundRecorderDevice.Instance.IsActive)
-        {
-            if (InteractionUI.Instance != null)
-                InteractionUI.Instance.ShowMessage("You need the Sound Recorder Device!", 2f);
-            return;
-        }
-
-        if (isInteracting)
-        {
-            StopInteraction();
-        }
-        else
-        {
-            StartInteraction();
-        }
-    }
-
-    private void StartInteraction()
-    {
-        isInteracting = true;
-        Debug.Log("[ResonanceDoor] Starting interaction. Opening UI...");
-
-        if (ResonanceUI.Instance != null)
-            ResonanceUI.Instance.OpenInteraction(this);
-        else
-            Debug.LogError("[ResonanceDoor] ResonanceUI.Instance is NULL! Cannot open UI.");
-    }
-
-    private void StopInteraction()
-    {
-        Debug.Log("[ResonanceDoor] Stopping interaction.");
-        isInteracting = false;
-        matchTimer = 0f;
-        currentQuality = 0f;
-
-        if (SoundRecorderDevice.Instance != null)
-            SoundRecorderDevice.Instance.SetResonance(0f);
-
-        if (ResonanceUI.Instance != null && ResonanceUI.Instance.IsOpen)
-            ResonanceUI.Instance.CloseInteraction();
-
-        if (doorModel != null)
-            doorModel.localPosition = originalPosition;
-
-        if (doorAudio != null && doorAudio.isPlaying)
-            doorAudio.Stop();
-    }
-
-    /// <summary>
-    /// Called by ResonanceUI.CloseInteraction() to sync state.
-    /// Prevents ResonanceDoor Update from running after UI is closed.
-    /// </summary>
-    public void OnUIClosed()
-    {
-        if (isInteracting)
-        {
-            Debug.Log("[ResonanceDoor] OnUIClosed - syncing state.");
-            isInteracting = false;
-            matchTimer = 0f;
-            currentQuality = 0f;
-            
-            if (SoundRecorderDevice.Instance != null)
-                SoundRecorderDevice.Instance.SetResonance(0f);
-            
-            if (doorModel != null)
-                doorModel.localPosition = originalPosition;
-            
-            if (doorAudio != null && doorAudio.isPlaying)
-                doorAudio.Stop();
-        }
-    }
-
-    // ==========================================
-    // Update - only while interacting
-    // ==========================================
 
     void Update()
     {
-        if (isUnlocked || !isInteracting) return;
-
-        SoundRecorderDevice device = SoundRecorderDevice.Instance;
-        if (device == null || !device.IsActive)
+        if (isUnlocked || playerDevice == null || !playerDevice.HasDevice)
         {
-            StopInteraction();
+            // Silence if done or no device
+            if (sineSource.volume > 0) sineSource.volume = Mathf.MoveTowards(sineSource.volume, 0f, Time.deltaTime);
+            if (staticSource.volume > 0) staticSource.volume = Mathf.MoveTowards(staticSource.volume, 0f, Time.deltaTime);
             return;
         }
 
-        // Auto-close if player walks away
-        float distance = Vector3.Distance(transform.position, device.transform.position);
-        if (distance > detectionRange)
-        {
-            StopInteraction();
-            return;
-        }
-
-        // Calculate quality (purely frequency-based)
-        float freqDiff = Mathf.Abs(device.CurrentFrequency - requiredFrequency);
+        float distance = Vector3.Distance(transform.position, playerDevice.transform.position);
         
-        if (freqDiff <= tolerance)
+        if (distance <= interactionRange)
         {
-            float t = 1f - (freqDiff / tolerance);
-            currentQuality = 0.9f + (t * 0.1f);
-        }
-        else if (freqDiff <= tolerance * 10f)
-        {
-            float t = 1f - ((freqDiff - tolerance) / (tolerance * 9f));
-            currentQuality = t * 0.9f;
+            HandleResonanceLogic(distance);
         }
         else
         {
-            currentQuality = 0f;
+            // Fade out if out of range
+            sineSource.volume = Mathf.MoveTowards(sineSource.volume, 0f, Time.deltaTime);
+            staticSource.volume = Mathf.MoveTowards(staticSource.volume, 0f, Time.deltaTime);
+            
+            // Notify device we are out of range
+            if (playerDevice != null)
+            {
+                playerDevice.ExitResonanceArea();
+            }
+        }
+    }
+
+    void HandleResonanceLogic(float distance)
+    {
+        float currentFreq = playerDevice.CurrentFrequency;
+        float freqDiff = Mathf.Abs(currentFreq - requiredFrequency);
+        
+        // Calculate Match Factor (0.0 to 1.0)
+        // 0.0 = Far from frequency
+        // 1.0 = Exact frequency
+        // usage range is roughly +/- 200 Hz for gradual feedback
+        float perceptionRange = 200f;
+        float matchFactor = 1.0f - Mathf.Clamp01(freqDiff / perceptionRange);
+        
+        // --- Audio Feedback ---
+        // Sine wave volume increases with match (Harmonic resonance)
+        float targetSineVol = matchFactor * masterVolume;
+        
+        // Static noise increases with MISMATCH (Disharmony)
+        // But only if we are somewhat close to the frequency
+        // If we are very far, maybe silence? Or low static?
+        // Prompt says: "Cızırtı azalmalı, net bir sinüs..." -> Static decreases as match increases.
+        float targetStaticVol = (1.0f - matchFactor) * masterVolume * 0.8f; 
+        
+        sineSource.volume = Mathf.Lerp(sineSource.volume, targetSineVol, Time.deltaTime * 5f);
+        staticSource.volume = Mathf.Lerp(staticSource.volume, targetStaticVol, Time.deltaTime * 5f);
+        
+        // Update Sine Pitch to match strict harmony? 
+        // Or keep it fixed at required? 
+        // If we change pitch, it sounds like tuning. Let's try to match sine pitch to current freq slightly?
+        // No, let's keep it simple: The door hums at the REQUIRED frequency.
+        // As you get closer, you hear it clearer.
+        
+        // --- Visual Feedback (UI + Device) ---
+        // Pass the match factor and Target Frequency to the device
+        playerDevice.EnterResonanceArea(requiredFrequency);
+        playerDevice.SetResonanceState(matchFactor, true);
+        
+        // --- Visual Feedback (Door/Self) ---
+        if (doorMaterial != null)
+        {
+            // Shake or vibrate based on match
+            if (matchFactor > 0.8f)
+            {
+                float shake = (matchFactor - 0.8f) * 0.05f;
+                transform.localPosition = originalLocalPosition + Random.insideUnitSphere * shake;
+            }
+            else
+            {
+                transform.localPosition = originalLocalPosition;
+            }
         }
 
-        device.SetResonance(currentQuality);
-        ApplyVibration();
-        UpdateDoorAudio();
-
-        // Match timer
+        // --- Unlock Logic ---
         if (freqDiff <= tolerance)
         {
-            matchTimer += Time.deltaTime;
-            if (matchTimer >= unlockDuration)
+            holdTimer += Time.deltaTime;
+            
+            // Optional: Door vibrates more intensely?
+            
+            if (holdTimer >= unlockTime)
             {
                 Unlock();
-                return;
             }
         }
         else
         {
-            matchTimer = Mathf.Max(0f, matchTimer - Time.deltaTime * 0.5f);
-        }
-        
-        if (ResonanceUI.Instance != null && ResonanceUI.Instance.IsOpen)
-            ResonanceUI.Instance.UpdateMatchProgress(matchTimer / unlockDuration, currentQuality);
-    }
-
-    // ==========================================
-    // Feedback
-    // ==========================================
-
-    private void ApplyVibration()
-    {
-        if (currentQuality > 0.1f)
-        {
-            float shake = currentQuality * vibrationIntensity;
-            float shakeSpeed = 20f + (currentQuality * 40f);
-            Vector3 offset = new Vector3(
-                Mathf.Sin(Time.time * shakeSpeed) * shake,
-                Mathf.Cos(Time.time * shakeSpeed * 1.3f) * shake * 0.5f,
-                Mathf.Sin(Time.time * shakeSpeed * 0.7f) * shake * 0.3f
-            );
-            doorModel.localPosition = originalPosition + offset;
-        }
-        else
-        {
-            doorModel.localPosition = Vector3.Lerp(doorModel.localPosition, originalPosition, Time.deltaTime * 10f);
+            holdTimer = Mathf.Max(0f, holdTimer - Time.deltaTime);
         }
     }
 
-    private void UpdateDoorAudio()
+    void Unlock()
     {
-        if (doorAudio == null) return;
-        
-        doorAudio.volume = Mathf.Lerp(doorAudio.volume, currentQuality * 0.6f, Time.deltaTime * 5f);
-        doorAudio.pitch = 0.8f + (currentQuality * 0.4f);
-        
-        if (currentQuality > 0.05f && !doorAudio.isPlaying && resonanceHum != null)
-            doorAudio.Play();
-        else if (currentQuality <= 0.05f && doorAudio.isPlaying)
-            doorAudio.Stop();
-    }
-
-    // ==========================================
-    // Unlock
-    // ==========================================
-
-    public void Unlock()
-    {
-        if (isUnlocked) return;
-        
         isUnlocked = true;
-        isInteracting = false;
-        Debug.Log("[ResonanceDoor] UNLOCKED! Resonance achieved!");
-
-        if (SoundRecorderDevice.Instance != null)
-            SoundRecorderDevice.Instance.SetResonance(0f);
-
-        if (ResonanceUI.Instance != null)
-            ResonanceUI.Instance.CloseInteraction();
+        Debug.Log("[ResonanceDoor] Unlocked via Frequency Resonance!");
         
+        // 1. Silence Audio
+        sineSource.Stop();
+        staticSource.Stop();
+        
+        // Close UI
+        if (playerDevice != null) playerDevice.ExitResonanceArea();
+        
+        // 2. Play Unlock Sound/Effect (if any)
+        
+        // 3. Destroy or Open
         StartCoroutine(DestructionSequence());
     }
 
-    /// <summary>Stop all effects when door unlocks</summary>
-    private void CleanupEffects()
+    IEnumerator DestructionSequence()
     {
-        if (doorEffects != null)
-            doorEffects.StopAllEffects();
-    }
-
-    private IEnumerator DestructionSequence()
-    {
-        float duration = 1.5f;
-        float elapsed = 0f;
-        Vector3 startScale = doorModel.localScale;
-        Quaternion startRotation = doorModel.localRotation;
+        // Visual feedback: Shrink and disappear for now
+        float timer = 0f;
+        Vector3 startScale = transform.localScale;
         
-        if (doorAudio != null)
+        while (timer < 0.5f)
         {
-            doorAudio.volume = 1f;
-            doorAudio.pitch = 1.5f;
-        }
-
-        CleanupEffects();
-        
-        while (elapsed < duration)
-        {
-            elapsed += Time.deltaTime;
-            float t = elapsed / duration;
-            
-            float shakeAmount = Mathf.Lerp(0.02f, 0.15f, t);
-            float shakeSpeed = 30f + (t * 60f);
-            
-            doorModel.localPosition = originalPosition + new Vector3(
-                Mathf.Sin(Time.time * shakeSpeed) * shakeAmount,
-                Mathf.Cos(Time.time * shakeSpeed * 1.4f) * shakeAmount * 0.5f,
-                Mathf.Sin(Time.time * shakeSpeed * 0.8f) * shakeAmount * 0.3f
-            );
-            
-            if (t > 0.6f)
-            {
-                float scaleT = (t - 0.6f) / 0.4f;
-                doorModel.localScale = Vector3.Lerp(startScale, Vector3.zero, scaleT);
-                float twist = scaleT * 15f;
-                doorModel.localRotation = startRotation * Quaternion.Euler(
-                    Random.Range(-twist, twist),
-                    Random.Range(-twist, twist),
-                    Random.Range(-twist, twist)
-                );
-            }
-            
-            if (doorAudio != null && t > 0.7f)
-                doorAudio.volume = Mathf.Lerp(1f, 0f, (t - 0.7f) / 0.3f);
-            
+            timer += Time.deltaTime;
+            transform.localScale = Vector3.Lerp(startScale, Vector3.zero, timer / 0.5f);
             yield return null;
         }
         
-        if (doorAudio != null) doorAudio.Stop();
-        Destroy(doorModel.gameObject);
-        if (doorModel == transform) Destroy(gameObject);
+        Destroy(gameObject);
     }
 
-    public float MatchProgress => Mathf.Clamp01(matchTimer / unlockDuration);
-    public float CurrentQuality => currentQuality;
-    
-    void OnDrawGizmosSelected()
+    // --- Procedural Audio Generation ---
+
+    AudioClip GenerateSineWave(float frequency)
     {
-        Gizmos.color = new Color(0, 1, 1, 0.3f);
-        Gizmos.DrawWireSphere(transform.position, detectionRange);
+        int sampleRate = 44100;
+        int lengthSamples = sampleRate * 2; // 2 seconds loop
+        float[] samples = new float[lengthSamples];
+        
+        for (int i = 0; i < lengthSamples; i++)
+        {
+            float t = (float)i / sampleRate;
+            samples[i] = Mathf.Sin(2 * Mathf.PI * frequency * t);
+        }
+        
+        AudioClip clip = AudioClip.Create("ResonanceSine", lengthSamples, 1, sampleRate, false);
+        clip.SetData(samples, 0);
+        return clip;
+    }
+
+    AudioClip GenerateStaticNoise()
+    {
+        int sampleRate = 44100;
+        int lengthSamples = sampleRate * 2;
+        float[] samples = new float[lengthSamples];
+        System.Random rng = new System.Random();
+        
+        for (int i = 0; i < lengthSamples; i++)
+        {
+            samples[i] = (float)rng.NextDouble() * 2f - 1f; // -1 to 1
+        }
+        
+        AudioClip clip = AudioClip.Create("ResonanceStatic", lengthSamples, 1, sampleRate, false);
+        clip.SetData(samples, 0);
+        return clip;
     }
 }
