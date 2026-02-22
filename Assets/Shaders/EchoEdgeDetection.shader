@@ -9,7 +9,10 @@ Shader "Hidden/EchoEdgeDetection"
         _PulseCenter ("Pulse Center", Vector) = (0.5, 0.5, 0, 0)
         _PulseThickness ("Pulse Thickness", Float) = 2.0
         _PulseFalloff ("Pulse Falloff", Float) = 1.0
+<<<<<<< HEAD
         _TrailMultiplier ("Trail Length Multiplier", Float) = 10.0
+=======
+>>>>>>> parent of 1874fee (Oda dizayn iyileştirmesi)
     }
     
     SubShader
@@ -47,7 +50,10 @@ Shader "Hidden/EchoEdgeDetection"
             float4 _PulseCenter;
             float _PulseThickness;
             float _PulseFalloff;
+<<<<<<< HEAD
             float _TrailMultiplier;
+=======
+>>>>>>> parent of 1874fee (Oda dizayn iyileştirmesi)
             
             v2f vert (appdata v)
             {
@@ -109,6 +115,7 @@ Shader "Hidden/EchoEdgeDetection"
                 float3 viewPos = i.viewRay * linearDepth;
                 float worldDist = length(viewPos);
                 
+<<<<<<< HEAD
                 // Calculate pulse ring effect with TRAIL
                 // _PulseRadius is the current outer edge of the wave
                 float distFromFront = _PulseRadius - worldDist;
@@ -129,17 +136,31 @@ Shader "Hidden/EchoEdgeDetection"
                     // Make it fairly sharp or small soft edge
                     pulseRing = 1.0 - saturate(-distFromFront / 0.5);
                 }
+=======
+                // Calculate pulse ring effect
+                float pulseDist = abs(worldDist - _PulseRadius);
+                float pulseRing = 1.0 - saturate(pulseDist / _PulseThickness);
+                pulseRing = pow(pulseRing, _PulseFalloff);
+>>>>>>> parent of 1874fee (Oda dizayn iyileştirmesi)
                 
                 // Combine edge with pulse
                 float finalEdge = edge * pulseRing;
                 
                 // Add subtle full-screen pulse glow
+<<<<<<< HEAD
                 float pulseGlow = pulseRing * 0.15 * (1.0 - edge); // Don't glow on edges twice
                 
                 // Apply edge color with additive blending for glow effect
                 // Use _EdgeColor alpha to control overall intensity
                 float4 edgeEffect = _EdgeColor * finalEdge * _EdgeColor.a;
                 float4 glowEffect = _EdgeColor * pulseGlow * _EdgeColor.a * 0.5; // Softer glow
+=======
+                float pulseGlow = pulseRing * 0.15;
+                
+                // Apply edge color with additive blending for glow effect
+                float4 edgeEffect = _EdgeColor * finalEdge;
+                float4 glowEffect = _EdgeColor * pulseGlow;
+>>>>>>> parent of 1874fee (Oda dizayn iyileştirmesi)
                 
                 return col + edgeEffect + glowEffect;
             }

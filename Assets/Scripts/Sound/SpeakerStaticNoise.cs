@@ -1,8 +1,5 @@
 using UnityEngine;
 using System.Collections;
-using System;
-
-public enum SpeakerMode { Static, Breathing, VoiceLine, Silent }
 
 [RequireComponent(typeof(AudioSource))]
 public class SpeakerStaticNoise : MonoBehaviour
@@ -31,40 +28,18 @@ public class SpeakerStaticNoise : MonoBehaviour
     [Header("Clip")]
     [SerializeField] private float clipLength = 4f;
 
-    [Header("Voice/Breathing")]
-    [Tooltip("Optional custom voice line clip (can be assigned via Inspector)")]
-    [SerializeField] private AudioClip customVoiceClip;
-    [Tooltip("Optional custom breathing clip")]
-    [SerializeField] private AudioClip customBreathingClip;
-
     public bool IsPlaying { get; private set; }
-    public SpeakerMode CurrentMode { get; private set; }
     private AudioSource audioSource;
-    private AudioSource voiceSource;
     private float baseVolume;
     private Coroutine fadeCoroutine;
-    private AudioClip staticClip;
-    private AudioClip breathingClip;
 
     void Awake()
     {
         audioSource = GetComponent<AudioSource>();
         baseVolume = masterVolume;
         IsPlaying = true;
-        CurrentMode = SpeakerMode.Static;
-
-        // Create secondary AudioSource for voice lines
-        voiceSource = gameObject.AddComponent<AudioSource>();
-        voiceSource.playOnAwake = false;
-        voiceSource.spatialBlend = 1.0f;
-        voiceSource.minDistance = minDistance;
-        voiceSource.maxDistance = maxDistance * 1.5f;
-        voiceSource.priority = 100;
-        voiceSource.volume = 0f;
-
-        staticClip = GenerateStaticNoiseClip();
-        breathingClip = customBreathingClip != null ? customBreathingClip : GenerateBreathingClip();
-        ConfigureSpatialAudio(staticClip);
+        AudioClip noiseClip = GenerateStaticNoiseClip();
+        ConfigureSpatialAudio(noiseClip);
     }
 
     AudioClip GenerateStaticNoiseClip()
@@ -112,7 +87,7 @@ public class SpeakerStaticNoise : MonoBehaviour
         audioSource.dopplerLevel = 0f;
         audioSource.reverbZoneMix = 1.1f;
         audioSource.Play();
-        audioSource.time = UnityEngine.Random.Range(0f, clipLength * 0.9f);
+        audioSource.time = Random.Range(0f, clipLength * 0.9f);
     }
 
     public void SetVolume(float target, float fadeDuration = 0.5f)
@@ -157,6 +132,7 @@ public class SpeakerStaticNoise : MonoBehaviour
         // StartCoroutine(HeavyStaticRoutine(duration));
     }
 
+<<<<<<< HEAD
     /// <summary>
     /// Switch speaker mode (Static, Breathing, VoiceLine, Silent)
     /// </summary>
@@ -348,6 +324,8 @@ public class SpeakerStaticNoise : MonoBehaviour
         return clip;
     }
 
+=======
+>>>>>>> parent of 1874fee (Oda dizayn iyileştirmesi)
     private IEnumerator FadeVolume(float target, float duration)
     {
         if (audioSource == null) yield break;
@@ -381,32 +359,14 @@ public class SpeakerStaticNoise : MonoBehaviour
 
     private IEnumerator HeavyStaticRoutine(float duration)
     {
-        if (audioSource == null) yield break;
         float orig = audioSource.volume;
         float target = Mathf.Min(orig * 3f, 0.5f);
         float e = 0f;
-        while (e < 0.1f)
-        {
-            e += Time.deltaTime;
-            audioSource.volume = Mathf.Lerp(orig, target, e / 0.1f);
-            yield return null;
-        }
-        yield return new WaitForSeconds(Mathf.Max(0f, duration - 0.2f));
+        while (e < 0.1f) { e += Time.deltaTime; audioSource.volume = Mathf.Lerp(orig, target, e / 0.1f); yield return null; }
+        yield return new WaitForSeconds(duration - 0.2f);
         e = 0f;
-        while (e < 0.1f)
-        {
-            e += Time.deltaTime;
-            audioSource.volume = Mathf.Lerp(target, orig, e / 0.1f);
-            yield return null;
-        }
+        while (e < 0.1f) { e += Time.deltaTime; audioSource.volume = Mathf.Lerp(target, orig, e / 0.1f); yield return null; }
         audioSource.volume = orig;
-    }
-
-    void OnDestroy()
-    {
-        // Clean up dynamically created AudioSource
-        if (voiceSource != null)
-            Destroy(voiceSource);
     }
 
     void OnValidate()

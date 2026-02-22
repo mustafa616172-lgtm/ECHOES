@@ -10,7 +10,7 @@ namespace Echoes.Horror
         [Header("Manual Darkness Control")]
         [Range(-5f, 5f)]
         [Tooltip("Lower value = Darker. Higher value = Brighter.")]
-        public float exposureOffset = -5f;
+        public float exposureOffset = -1.5f;
 
         [Header("Fog Settings")]
         [Range(0f, 0.2f)]
@@ -19,7 +19,7 @@ namespace Echoes.Horror
 
         [Header("Moon Light")]
         [Range(0f, 2f)]
-        public float moonIntensity = 0f;
+        public float moonIntensity = 0.2f;
         public Color moonColor = new Color(0.6f, 0.7f, 0.9f);
 
         [Header("References (Auto-Found)")]

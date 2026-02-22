@@ -114,7 +114,7 @@ public class EyeBlinkIntro : MonoBehaviour
     {
         disabledCanvases.Clear();
         
-        Canvas[] allCanvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+        Canvas[] allCanvases = FindObjectsOfType<Canvas>(true);
         foreach (Canvas c in allCanvases)
         {
             if (c == blinkCanvas) continue;
@@ -175,7 +175,7 @@ public class EyeBlinkIntro : MonoBehaviour
         yield return null;
         
         // Input'u kilitle
-        playerController = FindFirstObjectByType<PlayerController>();
+        playerController = FindObjectOfType<PlayerController>();
         if (playerController != null)
         {
             playerController.SetInputLock(true);

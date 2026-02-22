@@ -31,9 +31,9 @@ public class EchoesSceneConfigurator : MonoBehaviour
         Debug.Log("=== ECHOES Scene Graphics Setup Complete! ===");
         EditorUtility.DisplayDialog("Success", 
             "Horror graphics configured!\n\n" +
-            "? Global Volume with DefaultVolumeProfile\n" +
-            "? Fog settings (density 0.08, blue-dark)\n" +
-            "? Lighting adjusted for horror atmosphere\n\n" +
+            "✓ Global Volume with DefaultVolumeProfile\n" +
+            "✓ Fog settings (density 0.08, blue-dark)\n" +
+            "✓ Lighting adjusted for horror atmosphere\n\n" +
             "Press Play to test!", "OK");
     }
     
@@ -93,9 +93,7 @@ public class EchoesSceneConfigurator : MonoBehaviour
     {
         // Ambient lighting - very dark, blue-tinted
         RenderSettings.ambientMode = AmbientMode.Flat;
-        RenderSettings.ambientLight = Color.black;
-        RenderSettings.ambientIntensity = 0f;
-        RenderSettings.reflectionIntensity = 0f;
+        RenderSettings.ambientLight = new Color(0.05f, 0.05f, 0.08f, 1f);
         
         // Find and adjust Directional Light
         Light[] lights = Object.FindObjectsByType<Light>(FindObjectsSortMode.None);
@@ -103,15 +101,16 @@ public class EchoesSceneConfigurator : MonoBehaviour
         {
             if (light.type == LightType.Directional)
             {
-                // Disable directional light completely for pitch darkness
-                light.enabled = false;
-                light.intensity = 0f;
+                // Very dim directional light for horror
+                light.intensity = 0.3f;
+                light.color = new Color(0.7f, 0.75f, 0.85f, 1f); // Cool blue-grey
+                light.shadows = LightShadows.Soft;
                 
-                Debug.Log("[Graphics Setup] Directional Light DISABLED for complete darkness");
+                Debug.Log("[Graphics Setup] Directional Light adjusted: intensity 0.3, cool blue-grey");
             }
         }
         
-        Debug.Log("[Graphics Setup] Ambient lighting set to BLACK (complete darkness)");
+        Debug.Log("[Graphics Setup] Ambient lighting set: dark blue (0.05, 0.05, 0.08)");
     }
 }
 
